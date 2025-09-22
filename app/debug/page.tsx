@@ -50,7 +50,7 @@ function Section({ title, data }: { title: string; data: any }) {
       {data.length === 0 ? (
         <div className="text-gray-500">Not found</div>
       ) : (
-        <pre className="bg-gray-100 rounded p-4 overflow-x-auto max-h-[400px]">
+        <pre className="bg-zinc-900 rounded p-4 overflow-x-auto max-h-[400px]">
           {JSON.stringify(data, null, 2)}
         </pre>
       )}
