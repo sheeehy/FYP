@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../lib/generated/prisma"
 }
 
 datasource db {
@@ -67,7 +66,7 @@ model edges {
 }
 
 model entities {
-  id                              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                            String
   type                            entity_type
   location                        String?
@@ -75,14 +74,14 @@ model entities {
   tags                            String[]
   image_url                       String?
   links                           Json?
-  created_at                      DateTime?             @default(now()) @db.Timestamptz(6)
-  updated_at                      DateTime?             @default(now()) @db.Timestamptz(6)
-  edges_edges_source_idToentities edges[]               @relation("edges_source_idToentities")
-  edges_edges_target_idToentities edges[]               @relation("edges_target_idToentities")
+  created_at                      DateTime?            @default(now()) @db.Timestamptz(6)
+  updated_at                      DateTime?            @default(now()) @db.Timestamptz(6)
+  edges_edges_source_idToentities edges[]              @relation("edges_source_idToentities")
+  edges_edges_target_idToentities edges[]              @relation("edges_target_idToentities")
   entity_aliases                  entity_aliases[]
   entity_scores                   entity_scores?
+  scene_entities                  scene_entities[]
   shortlist_entities              shortlist_entities[]
-  subculture_entities             subculture_entities[]
 
   @@index([links], map: "index_entities_links_gin", type: Gin)
   @@index([tags], map: "index_entities_tags_gin", type: Gin)
@@ -126,36 +125,36 @@ model shortlists {
   clients            clients?             @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
-model subculture_entities {
-  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subculture_id String?         @db.Uuid
-  entity_id     String?         @db.Uuid
-  role          subculture_role
-  notes         String?
-  joined_at     DateTime?       @db.Date
-  left_at       DateTime?       @db.Date
-  created_at    DateTime?       @default(now()) @db.Timestamptz(6)
-  entities      entities?       @relation(fields: [entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  subcultures   subcultures?    @relation(fields: [subculture_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+model scene_entities {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scene_id   String?    @db.Uuid
+  entity_id  String?    @db.Uuid
+  role       scene_role
+  notes      String?
+  joined_at  DateTime?  @db.Date
+  left_at    DateTime?  @db.Date
+  created_at DateTime?  @default(now()) @db.Timestamptz(6)
+  entities   entities?  @relation(fields: [entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  scenes     scenes?    @relation(fields: [scene_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([subculture_id, entity_id], map: "unique_subculture_entity")
-  @@index([role], map: "index_subculture_entities_role")
+  @@unique([scene_id, entity_id], map: "unique_scene_entity")
+  @@index([role], map: "index_scene_entities_role")
 }
 
-model subcultures {
-  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name                String
-  location            String?
-  culture             String
-  subculture_name     String?
-  tags                String[]
-  description         String?
-  created_at          DateTime?             @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime?             @default(now()) @db.Timestamptz(6)
-  subculture_entities subculture_entities[]
+model scenes {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String
+  location        String?
+  culture         String
+  subculture_name String?
+  tags            String[]
+  description     String?
+  created_at      DateTime?        @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?        @default(now()) @db.Timestamptz(6)
+  scene_entities  scene_entities[]
 
-  @@index([location], map: "index_subcultures_location")
-  @@index([tags], map: "index_subcultures_tags_gin", type: Gin)
+  @@index([location], map: "index_scenes_location")
+  @@index([tags], map: "index_scenes_tags_gin", type: Gin)
 }
 
 enum budget_band {
@@ -181,7 +180,7 @@ enum entity_type {
   label
 }
 
-enum subculture_role {
+enum scene_role {
   core
   support
   emerging
