@@ -1,32 +1,23 @@
-// example page to test the supabase client
-'use client'
+// example page to test the prisma client
+import { prisma } from '@/lib/prisma'
 
-import { useEffect, useState } from 'react'
-import supabase from '@/lib/supabaseClient'
+export default async function ArtistsPage() {
+  const artists = await prisma.entities.findMany({
+    where: { type: 'artist' },
+    select: { id: true, name: true },
+  })
 
-export default function Artists() {
-  type Artist = { id: string | number; name: string }
-  const [artists, setArtists] = useState<Artist[]>([])
-
-  useEffect(() => { // useEffect to get the data from the database of type artist
-    async function getData() {
-      const { data, error } = await supabase
-        .from('entities')
-        .select('*')
-        .eq('type', 'artist')
-
-      if (error) console.error(error)
-      else setArtists((data ?? []) as Artist[])
-    }
-
-    getData()
-  }, [])
-
-  return ( // return the data
-    <div className='flex flex-col items-center justify-center mt-64' >
-      {artists.map((a) => (
-        <div key={a.id} className=''>{a.name}</div>
-      ))}
+  return (
+    <div className="flex flex-col items-center justify-center mt-32 space-y-2">
+      {artists.length === 0 ? (
+        <div>No artists found</div>
+      ) : (
+        artists.map((artist) => (
+          <div key={artist.id} className="text-lg font-medium">
+            {artist.name}
+          </div>
+        ))
+      )}
     </div>
   )
 }

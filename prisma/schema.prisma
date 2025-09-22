@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model audit_logs {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  table_name String?
+  action     String?
+  row_id     String?   @db.Uuid
+  change     Json?
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([action], map: "index_audit_logs_action")
+  @@index([table_name], map: "index_audit_logs_table")
+}
+
+model client_preferences {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id        String?   @db.Uuid
+  tag_weights      Json?
+  location_weights Json?
+  created_at       DateTime? @default(now()) @db.Timestamptz(6)
+  clients          clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([location_weights], map: "index_client_preferences_locations_gin", type: Gin)
+  @@index([tag_weights], map: "index_client_preferences_tags_gin", type: Gin)
+}
+
+model clients {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String
+  description        String?
+  budget             budget_band?
+  regions            String[]
+  tags               String[]
+  created_at         DateTime?            @default(now()) @db.Timestamptz(6)
+  client_preferences client_preferences[]
+  shortlists         shortlists[]
+
+  @@index([budget], map: "index_clients_budget")
+  @@index([regions], map: "index_clients_regions_gin", type: Gin)
+  @@index([tags], map: "index_clients_tags_gin", type: Gin)
+}
+
+model edges {
+  id                                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source_id                          String?   @db.Uuid
+  target_id                          String?   @db.Uuid
+  type                               edge_type
+  weight                             Int?      @default(1)
+  context                            String?
+  source_url                         String?
+  date                               DateTime? @db.Date
+  created_at                         DateTime? @default(now()) @db.Timestamptz(6)
+  entities_edges_source_idToentities entities? @relation("edges_source_idToentities", fields: [source_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  entities_edges_target_idToentities entities? @relation("edges_target_idToentities", fields: [target_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([source_id, target_id, type, date], map: "unique_edge")
+  @@index([source_id], map: "index_edges_source")
+  @@index([target_id], map: "index_edges_target")
+}
+
+model entities {
+  id                              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                            String
+  type                            entity_type
+  location                        String?
+  description                     String?
+  tags                            String[]
+  image_url                       String?
+  links                           Json?
+  created_at                      DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at                      DateTime?             @default(now()) @db.Timestamptz(6)
+  edges_edges_source_idToentities edges[]               @relation("edges_source_idToentities")
+  edges_edges_target_idToentities edges[]               @relation("edges_target_idToentities")
+  entity_aliases                  entity_aliases[]
+  entity_scores                   entity_scores?
+  shortlist_entities              shortlist_entities[]
+  subculture_entities             subculture_entities[]
+
+  @@index([links], map: "index_entities_links_gin", type: Gin)
+  @@index([tags], map: "index_entities_tags_gin", type: Gin)
+  @@index([type], map: "index_entities_type")
+}
+
+model entity_aliases {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_id  String?   @db.Uuid
+  alias      String
+  is_primary Boolean?  @default(false)
+  context    String?
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  entities   entities? @relation(fields: [entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model entity_scores {
+  entity_id        String    @id @db.Uuid
+  momentum_score   Float?
+  centrality_score Float?
+  last_updated     DateTime? @default(now()) @db.Timestamptz(6)
+  entities         entities  @relation(fields: [entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model shortlist_entities {
+  shortlist_id String     @db.Uuid
+  entity_id    String     @db.Uuid
+  notes        String?
+  entities     entities   @relation(fields: [entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  shortlists   shortlists @relation(fields: [shortlist_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([shortlist_id, entity_id])
+}
+
+model shortlists {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id          String?              @db.Uuid
+  name               String?
+  created_at         DateTime?            @default(now()) @db.Timestamptz(6)
+  shortlist_entities shortlist_entities[]
+  clients            clients?             @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model subculture_entities {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subculture_id String?         @db.Uuid
+  entity_id     String?         @db.Uuid
+  role          subculture_role
+  notes         String?
+  joined_at     DateTime?       @db.Date
+  left_at       DateTime?       @db.Date
+  created_at    DateTime?       @default(now()) @db.Timestamptz(6)
+  entities      entities?       @relation(fields: [entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subcultures   subcultures?    @relation(fields: [subculture_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([subculture_id, entity_id], map: "unique_subculture_entity")
+  @@index([role], map: "index_subculture_entities_role")
+}
+
+model subcultures {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String
+  location            String?
+  culture             String
+  subculture_name     String?
+  tags                String[]
+  description         String?
+  created_at          DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime?             @default(now()) @db.Timestamptz(6)
+  subculture_entities subculture_entities[]
+
+  @@index([location], map: "index_subcultures_location")
+  @@index([tags], map: "index_subcultures_tags_gin", type: Gin)
+}
+
+enum budget_band {
+  low
+  mid
+  high
+  enterprise
+}
+
+enum edge_type {
+  performed_with
+  part_of
+  collaborated_on
+  shared_lineup
+}
+
+enum entity_type {
+  artist
+  venue
+  crew
+  brand
+  publisher
+  label
+}
+
+enum subculture_role {
+  core
+  support
+  emerging
+}
