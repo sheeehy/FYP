@@ -6,6 +6,7 @@ export default async function ArtistsPage() {
     where: { type: 'artist' },
     select: { id: true, name: true },
   })
+  
 
   return (
     <div className="flex flex-col items-center justify-center mt-32 space-y-2">
