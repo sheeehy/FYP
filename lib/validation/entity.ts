@@ -10,7 +10,7 @@ export const EntitySchema = z
     slug: z.string().optional(),
     location: z.string().optional(),
     description: z.string().optional(),
-    tags: z.array(z.string()).default([]),
+    tags: z.array(z.string()),
     image_url: z.string().optional(), 
     links: z.record(z.string(), z.any()).optional(),
     profile: z.record(z.string(), z.any()).optional(),

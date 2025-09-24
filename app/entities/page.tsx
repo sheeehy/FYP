@@ -36,7 +36,7 @@ export default async function EntitiesPage() {
             <div>
               <h2 className="text-xl font-semibold">{entity.name}</h2>
               <p className="text-sm text-gray-500 capitalize">
-                {entity.type}
+                {entity.archetype}
               </p>
             </div>
 
