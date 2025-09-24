@@ -1,25 +1,18 @@
-import { z } from "zod"; // using zod for type validation and runtime safety for all entities
-// the app will still use supabase/prismas type validation, but for the messy archetype tags and other fields I also need runtime type validation
+import { z } from "zod";
 
-export const ArchetypeEnum = z.enum([ 
-  "individual", 
-  "group",
-  "venue",
-  "organization",
-  "media",
-  "event",
-  "work",
-]);
-
-export const EntitySchema = z.object({ // all entities need a name and archetype
-  name: z.string().min(1, "Name is required"),
-  archetype: ArchetypeEnum,
-  culture: z.string().optional(),
-  role: z.string().optional(),
-  location: z.string().optional(),
-  description: z.string().optional(),
-  tags: z.array(z.string()).default([]), // tags are always resolved to an array 
-  image_url: z.url().optional(),
-  links: z.record(z.string(), z.string()).optional(),
-});
-
+export const EntitySchema = z
+  .object({
+    name: z.string().min(1),
+    archetype: z.enum([
+      "person","group","venue","organization","media","event","artifact",
+    ] as const),
+    role: z.string().optional(),
+    slug: z.string().optional(),
+    location: z.string().optional(),
+    description: z.string().optional(),
+    tags: z.array(z.string()).default([]),
+    image_url: z.string().optional(), 
+    links: z.record(z.string(), z.any()).optional(),
+    profile: z.record(z.string(), z.any()).optional(),
+  })
+  .strict();
