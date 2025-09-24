@@ -68,12 +68,15 @@ model edges {
 model entities {
   id                              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                            String
-  type                            entity_type
+  archetype                       archetype
+  role                            String?
+  slug                            String?              @unique
   location                        String?
   description                     String?
   tags                            String[]
   image_url                       String?
   links                           Json?
+  profile                         Json?
   created_at                      DateTime?            @default(now()) @db.Timestamptz(6)
   updated_at                      DateTime?            @default(now()) @db.Timestamptz(6)
   edges_edges_source_idToentities edges[]              @relation("edges_source_idToentities")
@@ -85,7 +88,7 @@ model entities {
 
   @@index([links], map: "index_entities_links_gin", type: Gin)
   @@index([tags], map: "index_entities_tags_gin", type: Gin)
-  @@index([type], map: "index_entities_type")
+  @@index([archetype], map: "index_entities_archetype")
 }
 
 model entity_aliases {
@@ -171,17 +174,18 @@ enum edge_type {
   shared_lineup
 }
 
-enum entity_type {
-  artist
-  venue
-  crew
-  brand
-  publisher
-  label
-}
-
 enum scene_role {
   core
   support
   emerging
+}
+
+enum archetype {
+  person
+  group
+  venue
+  organization
+  media
+  event
+  artifact
 }
