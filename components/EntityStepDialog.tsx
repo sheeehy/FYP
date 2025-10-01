@@ -24,7 +24,7 @@ import useMeasure from 'react-use-measure'
 type EntityFormData = z.infer<typeof EntitySchema> // infer data from zod schema
 
 const archetypes = [ // current list of archetypes (WIP)
-  { value: "person", label: "Person" },
+  { value: "person", label: "Person" }, 
   { value: "group", label: "Group" },
   { value: "venue", label: "Venue" },
   { value: "organization", label: "Organization" },
@@ -87,10 +87,10 @@ const steps = [ // form steps configuration, optionality isnt nailed down
   { id: 3, title: "Role", field: "role", required: true },
   { id: 4, title: "Tags", field: "tags", required: true },
   { id: 5, title: "Description", field: "description", required: true },
-  { id: 6, title: "Location", field: "location", required: true },
+  { id: 6, title: "Venue", field: "Venue", required: true },
   { id: 7, title: "Image", field: "image_url", required: true },
   { id: 8, title: "Links", field: "links", required: true },
-  { id: 9, title: "Profile", field: "profile", required: false },
+  { id: 9, title: "Attributes", field: "profile", required: false }, // attributes make more sense
 ] as const
 
 export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDialogProps) {
@@ -891,7 +891,7 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
               <Input
                 value={profileKeyInput}
                 onChange={(e) => setProfileKeyInput(e.target.value)}
-                placeholder='Key (e.g. "capacity")'
+                placeholder='Key'
                 className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -904,7 +904,7 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
               <Input
                 value={profileValueInput}
                 onChange={(e) => setProfileValueInput(e.target.value)}
-                placeholder='Value (e.g. "2000")'
+                placeholder='Value'
                 className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -975,16 +975,17 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="p-0 bg-white rounded-[32px] shadow-2xl border overflow-hidden sm:max-w-sm">
+      <DialogContent className="p-0 bg-white rounded-[32px] border overflow-hidden sm:max-w-sm">
       <motion.div
-  initial={{ height: currentStep === 1 ? 570 : 600 }}          // using a hardcoded height for step 1 because i cant get the submit button to be referrenced by useMeasure
-  animate={{ height: currentStep === 1 ? 570 : bounds.height || 600 }}
+  initial={{  opacity: 0, scale: 0.97, filter: "blur(6px)",height: currentStep === 1 ? 560 : 600 }}          // using a hardcoded height for step 1 because i cant get the submit button to be referrenced by useMeasure
+  animate={{ opacity: 1, scale: 1, filter: "blur(0px)" , height: currentStep === 1 ? 560 : bounds.height || 600 }}
+  exit={{ opacity: 0, scale: 0.97, filter: "blur(6px)" }}
   transition={{ type: "spring", bounce: 0, duration: 0.35 }}
   className="will-change-transform sm:max-w-md p-0 overflow-hidden"
 >
           <div ref={ref} className="flex flex-col w-full">
             
-            <DialogHeader className="border-b border-border/50 px-6 py-5 shrink-0">
+            <DialogHeader className=" px-6 pt-6 shrink-0">
               <div className="grid grid-cols-3 items-center">
                 <div className="justify-self-start">
                   {currentStep > 1 ? (
@@ -1036,7 +1037,7 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
               </div>
             )}
   
-            <div className="px-6 pb-5 shrink-0">
+            <div className="px-6 pb-6 shrink-0">
               <Button
                 onClick={goNext}
                 disabled={disableContinue}
