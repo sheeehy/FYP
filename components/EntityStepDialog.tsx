@@ -16,7 +16,7 @@ import { EntitySchema } from "@/lib/validation/entity"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { X, Plus, ArrowLeft, Upload } from "lucide-react"
+import { X, Plus, ArrowLeft, Upload, ArrowRight } from "lucide-react"
 import type { z } from "zod"
 import { motion, AnimatePresence } from "framer-motion"
 import useMeasure from 'react-use-measure'
@@ -1080,7 +1080,7 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="p-0 bg-white rounded-[32px] border overflow-hidden sm:max-w-sm">
+      <DialogContent className="p-0  rounded-[32px] border overflow-hidden sm:max-w-sm">
       <motion.div
   initial={{  opacity: 0, scale: 0.97, filter: "blur(6px)",height: currentStep === 1 ? 560 : 600 }}          // using a hardcoded height for step 1 because i cant get the submit button to be referrenced by useMeasure
   animate={{ opacity: 1, scale: 1, filter: "blur(0px)" , height: currentStep === 1 ? 560 : bounds.height || 600 }}
@@ -1143,23 +1143,28 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
             )}
   
             <div className="px-6 pb-6 shrink-0">
-              <Button
-                onClick={goNext}
-                disabled={disableContinue}
-                className={`w-full h-12 rounded-full font-medium transition-all ${
-                  disableContinue
-                    ? "bg-muted text-muted-foreground cursor-not-allowed"
-                    : "bg-black text-white hover:bg-black/90 shadow-sm hover:shadow-md"
-                }`}
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center">Creating...</span>
-                ) : currentStep === steps.length ? (
-                  "Create entity →"
-                ) : (
-                  "Continue →"
-                )}
-              </Button>
+            <Button
+  onClick={goNext}
+  disabled={disableContinue}
+  className={cn(
+    "w-full h-12 rounded-full font-medium transition-all",
+    disableContinue
+      ? "bg-muted text-muted-foreground cursor-not-allowed"
+      : "shadow-sm hover:shadow-md"
+  )}
+>
+  {isSubmitting ? (
+    <span className="flex items-center">Creating...</span>
+  ) : currentStep === steps.length ? (
+    <span className="flex items-center justify-center gap-2">
+      Create entity <ArrowRight className="h-4 w-4" />
+    </span>
+  ) : (
+    <span className="flex items-center justify-center gap-2">
+      Continue <ArrowRight className="h-4 w-4" />
+    </span>
+  )}
+</Button>
             </div>
           </div>
         </motion.div>
