@@ -1,12 +1,16 @@
-"use client"
+// a slightly over engineered dialog (WIP)
+// i want really solid ui/ux so im using this as a reference component
 
-// super messy multi step dialog
-// good for ux, code isnt clean
+// inspired by this article: https://jakub.kr/components/sign-in-dialog
+// liked both the ui + the motion element (using react-use-measure)
+
 // using react hook form + zod + shadcn
+
+"use client"
 
 import type React from "react"
 import { useState, useEffect, useRef, useMemo, forwardRef } from "react"
-import { useForm, Controller } from "react-hook-form"
+import { useForm, Controller, type FieldError } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { EntitySchema } from "@/lib/validation/entity"
 import { Button } from "@/components/ui/button"
@@ -14,38 +18,41 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { X, Plus, ArrowLeft, Upload } from "lucide-react"
 import type { z } from "zod"
+import { motion, AnimatePresence } from "framer-motion"
+import useMeasure from 'react-use-measure'
 
-type EntityFormData = z.infer<typeof EntitySchema>
+type EntityFormData = z.infer<typeof EntitySchema> // infer data from zod schema
 
-const archetypes = [
+const archetypes = [ // current list of archetypes (WIP)
   { value: "person", label: "Person" },
   { value: "group", label: "Group" },
-  { value: "venue", label: "Venue" }, 
+  { value: "venue", label: "Venue" },
   { value: "organization", label: "Organization" },
   { value: "media", label: "Media" },
   { value: "event", label: "Event" },
   { value: "artifact", label: "Artifact" },
 ] as const
 
-interface EntityStepDialogProps {
+interface EntityStepDialogProps { // dialog props
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
 }
 
-// text area fix
-type AutoGrowTextareaProps = Omit<React.ComponentProps<"textarea">, "rows"> & {
-  onAutoGrow?: () => void
-}
-const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
-  ({ onAutoGrow, className, style, onInput, ...rest }, forwardedRef) => {
+const getErrorMessage = (e: unknown): string | undefined => // readable error message from fields
+  typeof (e as FieldError | undefined)?.message === "string" ? (e as FieldError).message : undefined
+
+type AutoGrowTextareaProps = Omit<React.ComponentProps<"textarea">, "rows"> & { onAutoGrow?: () => void }
+
+const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>( // auto growing textarea
+  ({ onAutoGrow, className, style, onInput, ...rest }, forwardedRef) => { // nice to have for all fields but needed for description step
     const localRef = useRef<HTMLTextAreaElement | null>(null)
-    const setRefs = (node: HTMLTextAreaElement | null) => {
+    const setRefs = (node: HTMLTextAreaElement | null) => { // manage local and forwarded refs
       localRef.current = node
       if (typeof forwardedRef === "function") forwardedRef(node)
       else if (forwardedRef) (forwardedRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = node
     }
-    const autoGrow = () => {
+    const autoGrow = () => { // expand textarea height to fit content in the step (WIP)
       const el = localRef.current
       if (!el) return
       el.style.height = "auto"
@@ -54,7 +61,6 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
     }
     useEffect(() => {
       autoGrow()
-   
     }, [])
     return (
       <textarea
@@ -65,7 +71,7 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
           autoGrow()
           onInput?.(e)
         }}
-        className={`bg-gray-100 border border-gray-200 rounded-lg placeholder:text-gray-500 resize-none leading-6 w-full px-4 py-3 ${className ?? ""}`}
+        className={`bg-muted border border-border rounded-lg placeholder:text-muted-foreground resize-none leading-6 w-full px-4 py-3 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20 ${className ?? ""}`}
         style={{ overflow: "hidden", ...style }}
         autoComplete="off"
         data-lpignore="true"
@@ -75,39 +81,61 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
 )
 AutoGrowTextarea.displayName = "AutoGrowTextarea"
 
-const steps = [
+const steps = [ // form steps configuration, optionality isnt nailed down
   { id: 1, title: "Archetype", field: "archetype", required: true },
   { id: 2, title: "Name", field: "name", required: true },
-  { id: 3, title: "Role", field: "role", required: false },
-  { id: 4, title: "Tags", field: "tags", required: false },
-  { id: 5, title: "Description", field: "description", required: false },
-  { id: 6, title: "Location", field: "location", required: false }, 
-  { id: 7, title: "Image", field: "image_url", required: false },
-  { id: 8, title: "Links", field: "links", required: false },
-  { id: 9, title: "Profile", field: "profile", required: false }, 
+  { id: 3, title: "Role", field: "role", required: true },
+  { id: 4, title: "Tags", field: "tags", required: true },
+  { id: 5, title: "Description", field: "description", required: true },
+  { id: 6, title: "Location", field: "location", required: true },
+  { id: 7, title: "Image", field: "image_url", required: true },
+  { id: 8, title: "Links", field: "links", required: true },
+  { id: 9, title: "Profile", field: "profile", required: false },
 ] as const
 
 export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDialogProps) {
-  const [currentStep, setCurrentStep] = useState(1)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const [currentStep, setCurrentStep] = useState(1) // step state
+  const [isSubmitting, setIsSubmitting] = useState(false) // submission states
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const [tags, setTags] = useState<string[]>([])
+  const [tags, setTags] = useState<string[]>([]) // tags states
   const [tagInput, setTagInput] = useState("")
 
-  const [links, setLinks] = useState<Array<{ key: string; value: string }>>([])
+  const [links, setLinks] = useState<Array<{ key: string; value: string }>>([]) // link states
   const [linkPlatformInput, setLinkPlatformInput] = useState("")
   const [linkUrlInput, setLinkUrlInput] = useState("")
   const [linkInlineError, setLinkInlineError] = useState<string | null>(null)
 
-  const [profilePairs, setProfilePairs] = useState<Array<{ key: string; value: string }>>([])
+  const [profilePairs, setProfilePairs] = useState<Array<{ key: string; value: string }>>([]) //profile states
   const [profileKeyInput, setProfileKeyInput] = useState("")
   const [profileValueInput, setProfileValueInput] = useState("")
 
-  const defaultValues = useMemo(
+  const [activeArchetype, setActiveArchetype] = useState<string | null>(null) // archetype and touched step tracking
+  const [touchedSteps, setTouchedSteps] = useState<Record<number, boolean>>({})
+
+  const slugSetRef = useRef<Set<string> | null>(null) // slug cache and live duplicate state
+  const loadingSlugsRef = useRef<boolean>(false)
+  const [nameDuplicate, setNameDuplicate] = useState(false)
+  const [nameChecking, setNameChecking] = useState(false)
+
+  const archetypeFirstBtnRef = useRef<HTMLButtonElement | null>(null) // focus refs for each step
+  const nameRef = useRef<HTMLTextAreaElement | null>(null)
+  const roleRef = useRef<HTMLTextAreaElement | null>(null)
+  const tagInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const descRef = useRef<HTMLTextAreaElement | null>(null)
+  const locationRef = useRef<HTMLTextAreaElement | null>(null)
+  const imageUrlRef = useRef<HTMLInputElement | null>(null)
+  const linkPlatformRef = useRef<HTMLInputElement | null>(null)
+  const profileKeyRef = useRef<HTMLInputElement | null>(null)
+
+  const [ref, bounds] = useMeasure() // get content height, needed for animation
+
+
+  const defaultValues = useMemo( // default form values / also i dont think memo actually improves performance here (WIP)
     () => ({
       archetype: undefined as unknown as EntityFormData["archetype"],
-      name: "",   // no slug in form i just always generated from name 
+      name: "",
       role: "",
       tags: [] as string[],
       description: "",
@@ -115,13 +143,12 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
       image_url: "",
       links: {} as Record<string, string> | undefined,
       profile: {} as Record<string, string> | undefined,
-    
-      
     }),
     [],
   )
 
   const {
+    // react hook form setup 
     register,
     handleSubmit,
     setValue,
@@ -130,6 +157,8 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
     reset,
     control,
     watch,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm<EntityFormData>({
     resolver: zodResolver(EntitySchema),
@@ -138,11 +167,17 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
     defaultValues,
   })
 
-  const initializedRef = useRef(false)
+  const { ref: nameRegRef, ...nameReg } = register("name") // register fields for refs
+  const { ref: roleRegRef, ...roleReg } = register("role")
+  const { ref: descRegRef, ...descReg } = register("description")
+  const { ref: locRegRef, ...locReg } = register("location")
+  const { ref: imgRegRef, ...imgReg } = register("image_url")
+
+  const initializedRef = useRef(false) // run once on mount to sync initial form values (will be needed for update)
   useEffect(() => {
     if (initializedRef.current) return
     initializedRef.current = true
-    const initialTags = (getValues("tags") as string[] | undefined) ?? []
+    const initialTags = (getValues("tags") as string[] | undefined) ?? [] // also load tags, links, etc. if there needed
     if (initialTags.length) setTags(initialTags)
     const initialLinks = getValues("links") as Record<string, string> | undefined
     if (initialLinks) setLinks(Object.entries(initialLinks).map(([key, value]) => ({ key, value })))
@@ -150,7 +185,38 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
     if (initialProfile) setProfilePairs(Object.entries(initialProfile).map(([key, value]) => ({ key, value })))
   }, [])
 
-  const resetForm = () => {
+  const focusCurrentStep = () => { // focus the correct input when the step changes / probably a better way to do this natively with shadcn
+    requestAnimationFrame(() => {
+      switch (currentStep) {
+        case 1: archetypeFirstBtnRef.current?.focus(); break
+        case 2: nameRef.current?.focus(); break
+        case 3: roleRef.current?.focus(); break
+        case 4: tagInputRef.current?.focus(); break
+        case 5: descRef.current?.focus(); break
+        case 6: locationRef.current?.focus(); break
+        case 7: imageUrlRef.current?.focus(); break
+        case 8: linkPlatformRef.current?.focus(); break
+        case 9: profileKeyRef.current?.focus(); break
+      }
+    })
+  }
+
+  useEffect(() => { // reset the form state when dialog opens
+    focusCurrentStep()
+  }, [currentStep])
+
+  useEffect(() => {
+    if (open) {
+      setCurrentStep(1)
+      setTouchedSteps({})
+      setActiveArchetype(null)
+      setNameDuplicate(false)
+      setNameChecking(false)
+      focusCurrentStep()
+    }
+  }, [open])
+
+  const resetForm = () => { // full reset of form and local state
     reset(defaultValues)
     setCurrentStep(1)
     setTags([])
@@ -163,39 +229,27 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
     setProfileKeyInput("")
     setProfileValueInput("")
     setSubmitError(null)
+    setTouchedSteps({})
+    setActiveArchetype(null)
+    slugSetRef.current = null
+    setNameDuplicate(false)
+    setNameChecking(false)
   }
 
-  const handleClose = (nextOpen: boolean) => {
+  const handleClose = (nextOpen: boolean) => { // close handler
     if (!nextOpen) resetForm()
     onOpenChange(nextOpen)
   }
 
-  const currentStepData = steps[currentStep - 1]
-
-  const goNext = async () => {
-    if (currentStep === steps.length) {
-      await handleSubmit(onSubmit)()
-      return
-    }
-    const field = currentStepData.field as keyof EntityFormData
-    const valid = await trigger(field, { shouldFocus: true })
-    if (currentStepData.required && !valid) return
-    setCurrentStep((s) => s + 1)
-  }
-
-  const goBack = () => {
-    if (currentStep > 1) setCurrentStep((s) => s - 1)
-  }
-
-  const slugify = (s: string) =>
+  const slugify = (s: string) => // convert string to url for slug
     s
       .toLowerCase()
       .trim()
-      .replace(/['’]/g, "")
+      .replace(/['"]/g, "")
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
 
-  const isValidUrl = (u: string) => {
+  const isValidUrl = (u: string) => { // url validation
     try {
       const url = new URL(u)
       return url.protocol === "http:" || url.protocol === "https:"
@@ -204,22 +258,27 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
     }
   }
 
-  const addTag = () => {
+  const addTag = () => { // add tag from input
     const t = tagInput.trim().toLowerCase()
     if (!t) return
     const next = Array.from(new Set([...tags, t]))
     setTags(next)
     setTagInput("")
     setValue("tags", next, { shouldDirty: true, shouldTouch: true, shouldValidate: true })
+    clearErrors("tags")
+    setTouchedSteps((prev) => ({ ...prev, 4: true }))
   }
 
-  const removeTag = (tagToRemove: string) => {
+  const removeTag = (tagToRemove: string) => { // remove tag
     const next = tags.filter((tag) => tag !== tagToRemove)
     setTags(next)
     setValue("tags", next, { shouldDirty: true, shouldTouch: true, shouldValidate: true })
+    if (next.length === 0) {
+      setError("tags", { type: "required", message: "At least one tag is required" })
+    }
   }
 
-  const toObject = (arr: Array<{ key: string; value: string }>) => {
+  const toObject = (arr: Array<{ key: string; value: string }>) => { // convert array to object
     const out: Record<string, string> = {}
     arr.forEach(({ key, value }) => {
       const k = key.trim()
@@ -229,7 +288,7 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
     return Object.keys(out).length ? out : undefined
   }
 
-  const addLink = () => {
+  const addLink = () => { // add a link row
     setLinkInlineError(null)
     const platform = linkPlatformInput.trim()
     const url = linkUrlInput.trim()
@@ -243,14 +302,20 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
     setValue("links", toObject(newLinks), { shouldDirty: true, shouldTouch: true, shouldValidate: true })
     setLinkPlatformInput("")
     setLinkUrlInput("")
+    clearErrors("links" as any)
+    setTouchedSteps((prev) => ({ ...prev, 8: true }))
   }
 
-  const removeLink = (index: number) => {
+  const removeLink = (index: number) => { // remove link row by index
     const newLinks = links.filter((_, i) => i !== index)
     setLinks(newLinks)
     setValue("links", toObject(newLinks), { shouldDirty: true, shouldTouch: true, shouldValidate: true })
+    if (newLinks.length === 0) {
+      setError("links" as any, { type: "required", message: "At least one link is required" } as any)
+    }
   }
 
+  // profile pairs are a work in progress, for now they just use a key and value to json
   const addProfilePair = () => {
     const k = profileKeyInput.trim()
     const v = profileValueInput.trim()
@@ -268,132 +333,341 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
     setValue("profile", toObject(next), { shouldDirty: true, shouldTouch: true, shouldValidate: true })
   }
 
-  const onSubmit = async (data: EntityFormData) => {
+  // check slug availability and cache it
+  const ensureSlugSet = async () => {
+    if (slugSetRef.current || loadingSlugsRef.current) return
+    loadingSlugsRef.current = true
+    try {
+      const res = await fetch("/api/entities", { headers: { "Content-Type": "application/json" } })
+      if (!res.ok) throw new Error("Failed")
+      const entities = (await res.json()) as Array<{ slug?: string; name?: string }>
+      slugSetRef.current = new Set(
+        (entities || [])
+          .map((e) => (e.slug || slugify(e.name || "")).trim())
+          .filter(Boolean),
+      )
+    } catch {
+      slugSetRef.current = null
+    } finally {
+      loadingSlugsRef.current = false
+    }
+  }
+
+  const isSlugTaken = async (slug: string): Promise<boolean> => {
+    await ensureSlugSet()
+    const set = slugSetRef.current
+    if (!set) return false
+    return set.has(slug)
+  }
+
+  const nameValue = watch("name") // live name duplicate check, disables button immediately and clears as user fixes
+  const nameDebounceRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (nameDebounceRef.current) {
+      window.clearTimeout(nameDebounceRef.current)
+      nameDebounceRef.current = null
+    }
+    const n = (nameValue || "").trim()
+    if (!n) {
+      setNameDuplicate(false)
+      setNameChecking(false)
+      if (getErrorMessage(errors.name) === "That name is already taken") clearErrors("name")
+      return
+    }
+    setNameChecking(true)
+    nameDebounceRef.current = window.setTimeout(async () => {
+      const slug = slugify(n)
+      const taken = await isSlugTaken(slug)
+      setNameDuplicate(taken)
+      setNameChecking(false)
+      if (taken) {
+        setError("name", { type: "validate", message: "That name is already taken" })
+      } else if (getErrorMessage(errors.name) === "That name is already taken") {
+        clearErrors("name")
+      }
+    }, 250)
+    return () => {
+      if (nameDebounceRef.current) {
+        window.clearTimeout(nameDebounceRef.current)
+        nameDebounceRef.current = null
+      }
+    }
+  }, [nameValue])
+
+  const validateCurrentStep = async (): Promise<boolean> => { // validate steps
+    setTouchedSteps((prev) => ({ ...prev, [currentStep]: true })) // each step has slightly different validations but theyre straight forward
+    switch (currentStep) { // also, as of now, zod, prisma and client have slightly different variations (gulp)
+      case 1: return await trigger("archetype", { shouldFocus: true })
+      case 2: {
+        const ok = await trigger("name", { shouldFocus: true })
+        if (!ok) return false
+        const n = (getValues("name") || "").trim()
+        if (!n) return false
+        if (nameChecking) {
+          const slug = slugify(n)
+          const taken = await isSlugTaken(slug)
+          setNameDuplicate(taken)
+          if (taken) {
+            setError("name", { type: "validate", message: "That name is already taken" })
+            return false
+          }
+        }
+        if (nameDuplicate) return false
+        return true
+      }
+      case 3: return await trigger("role", { shouldFocus: true })
+      case 4: {
+        if (tags.length === 0) {
+          setError("tags", { type: "required", message: "At least one tag is required" })
+          tagInputRef.current?.focus()
+          return false
+        }
+        clearErrors("tags")
+        return true
+      }
+      case 5: return await trigger("description", { shouldFocus: true })
+      case 6: return await trigger("location", { shouldFocus: true })
+      case 7: {
+        const val = getValues("image_url")?.trim()
+        if (!val) {
+          setError("image_url", { type: "required", message: "Image URL is required" })
+          imageUrlRef.current?.focus()
+          return false
+        }
+        if (!isValidUrl(val)) {
+          setError("image_url", { type: "validate", message: "Image URL must be a valid URL" })
+          imageUrlRef.current?.focus()
+          return false
+        }
+        clearErrors("image_url")
+        return true
+      }
+      case 8: {
+        if (links.length === 0) {
+          setError("links" as any, { type: "required", message: "At least one link is required" } as any)
+          linkPlatformRef.current?.focus()
+          return false
+        }
+        clearErrors("links" as any)
+        return true
+      }
+      case 9: return true
+      default: return true
+    }
+  }
+
+  const goNext = async () => { // step / dialog navigation
+    if (currentStep === steps.length) {
+      await handleSubmit(onSubmit)()
+      return
+    }
+    const valid = await validateCurrentStep()
+    if (!valid) return
+    setCurrentStep((s) => s + 1)
+  }
+
+  const goBack = () => {
+    if (currentStep > 1) setCurrentStep((s) => s - 1)
+  }
+
+  const onSubmit = async (data: EntityFormData) => { // submit handler
     setIsSubmitting(true)
     setSubmitError(null)
     try {
-      // apparantly lowercase is standard - dont know why
       const cleanedTags = Array.from(new Set((tags ?? []).map((t) => t.toLowerCase().trim()).filter(Boolean)))
-      data.tags = cleanedTags as any
-
+      data.tags = cleanedTags as any // clean tags
 
       const linksObj = toObject(links)
-      if (linksObj) {
+      if (linksObj) { // validate links
         for (const [, v] of Object.entries(linksObj)) {
           if (!isValidUrl(v)) throw new Error("One or more links are not valid URLs")
         }
       }
       data.links = linksObj as any
+      data.profile = toObject(profilePairs) as any
 
-   
-      data.profile = toObject(profilePairs) as any    // profile JSON
+      const img = (data.image_url || "").trim() // validate img is url (WIP)
+      if (!img) throw new Error("Image URL is required")
+      if (!isValidUrl(img)) throw new Error("Image URL must be a valid URL")
 
-    
-      if (data.image_url && data.image_url.trim().length && !isValidUrl(data.image_url)) {
-        throw new Error("Image URL must be a valid URL")
+        // will need to implement drag and drop, file uploads eventually
+        // probably will use UploadThing and a drag and drop component
+
+      const name = (data.name || "").trim() // generate slug from name
+      const slug = slugify(name)
+      ;(data as any).slug = slug
+
+      if (await isSlugTaken(slug)) { // check not duplicate
+        setCurrentStep(2)
+        setNameDuplicate(true)
+        setError("name", { type: "validate", message: "That name is already taken" })
+        throw new Error("That name is already taken")
       }
 
-    
-      ;(data as any).slug = slugify(data.name || "")   // slug always comes from name (spaces -> "-", lowercase, punctuation removed too)
-
-      const response = await fetch("/api/entities", {
+      const res = await fetch("/api/entities", { // post
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        const raw = String(errorData?.error ?? "Failed to create entity")
-
-    
-        if (/P2002/.test(raw) || (/unique/i.test(raw) && /slug/i.test(raw))) {     // prisma unique constraint for slug
-          throw new Error("Entity with this slug already exists") // displaying at wrong step
-        }
-
-        throw new Error(raw)
+      if (!res.ok) {
+        let msg = "Failed to create entity"
+        try {
+          const j = await res.json()
+          if (j?.error) msg = j.error
+        } catch {}
+        throw new Error(msg)
       }
 
+      slugSetRef.current = null // reset cache and form after success
       resetForm()
       onOpenChange(false)
       onSuccess?.()
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "An error occurred")
+      setSubmitError(error instanceof Error ? error.message : "Error")
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handleEnterToContinue = (e: React.KeyboardEvent) => {
+  const handleEnterToContinue = (e: React.KeyboardEvent) => { // keyboard shortcuts (need more maybe)
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       void goNext()
     }
   }
 
-  const watched = watch()
-  const fieldName = currentStepData.field as keyof EntityFormData
-  const fieldVal = watched[fieldName]
-  const isEmpty = fieldVal === undefined || fieldVal === "" || (Array.isArray(fieldVal) && fieldVal.length === 0)
-  const stepHasError = Boolean(errors[fieldName])
-  const disableContinue = currentStepData.required && (isEmpty || stepHasError)
-  const stepKey = currentStepData.field
+  const shouldShowError = (step: number) => touchedSteps[step] === true // helpers for checking step state
 
-  const renderStepContent = () => {
+  const isStepFilled = (id: number): boolean => {
+    switch (id) {
+      case 1: return Boolean(watch("archetype"))
+      case 2: return Boolean((watch("name") || "").trim())
+      case 3: return Boolean((watch("role") || "").trim())
+      case 4: return tags.length > 0
+      case 5: return Boolean((watch("description") || "").trim())
+      case 6: return Boolean((watch("location") || "").trim())
+      case 7: return Boolean((watch("image_url") || "").trim())
+      case 8: return links.length > 0
+      case 9: return true
+      default: return false
+    }
+  }
+
+  const isStepValid = (id: number): boolean => {
+    if (!isStepFilled(id)) return false
+    switch (id) {
+      case 1: return !errors.archetype
+      case 2: return !errors.name && !nameDuplicate && !nameChecking
+      case 3: return !errors.role
+      case 4: return !errors.tags && tags.length > 0
+      case 5: return !errors.description
+      case 6: return !errors.location
+      case 7: {
+        const val = (watch("image_url") || "").trim()
+        return !errors.image_url && Boolean(val) && isValidUrl(val)
+      }
+      case 8: return !errors.links && links.length > 0
+      case 9: return true
+      default: return false
+    }
+  }
+
+  const disableContinue = isSubmitting || !isStepValid(currentStep) // disable continue button if step invalid or submitting
+
+  const renderStepContent = () => { // display steps
+    const stepKey = steps[currentStep - 1].field as keyof EntityFormData
     switch (currentStep) {
       case 1:
         return (
-          <div className="space-y-4" key={stepKey}>
+          <div className="space-y-3" key={stepKey as string}>
             <Controller
               name="archetype"
               control={control}
               render={({ field }) => (
-                <div className="space-y-2">
-                  {archetypes.map((archetype) => (
-                    <Button
-                      key={archetype.value}
-                      type="button"
-                      className={`w-full h-12 justify-start text-left font-medium rounded-lg ${
-                        field.value === archetype.value ? "bg-black text-white" : "bg-zinc-100 text-gray-900"
-                      }`}
-                      onClick={() => field.onChange(archetype.value)}
-                    >
-                      {archetype.label}
-                    </Button>
+                <div className="space-y-2 relative">
+                  {archetypes.map((archetype, idx) => (
+                    <div key={archetype.value} className="relative">
+                      <Button
+                        type="button"
+                        className={`w-full h-12 justify-start text-left font-medium rounded-lg relative overflow-hidden ${
+                          field.value === archetype.value
+                            ? "bg-primary text-primary-foreground shadow-md"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        }`}
+                        onClick={() => {
+                          field.onChange(archetype.value)
+                          setActiveArchetype(archetype.value)
+                          setTouchedSteps((prev) => ({ ...prev, 1: true }))
+                          void trigger("archetype")
+                        }}
+                        ref={idx === 0 ? archetypeFirstBtnRef : undefined}
+                        onMouseEnter={() => setActiveArchetype(archetype.value)}
+                        onMouseLeave={() => setActiveArchetype((field.value as string) || null)}
+                      >
+                        <span className="relative z-10">{archetype.label}</span>
+                      </Button>
+                    </div>
                   ))}
                 </div>
               )}
             />
-            {errors.archetype && <p className="text-sm text-red-500">{errors.archetype.message}</p>}
+            {shouldShowError(1) && getErrorMessage(errors.archetype) && (
+              <p className="text-sm text-destructive">{getErrorMessage(errors.archetype)}</p>
+            )}
           </div>
         )
+
       case 2:
         return (
-          <div className="space-y-4" key={stepKey}>
+          <div className="space-y-2" key={stepKey as string}>
             <AutoGrowTextarea
-              {...register("name")}
+              {...nameReg}
+              ref={(el) => {
+                nameRegRef(el)
+                nameRef.current = el
+              }}
               placeholder="Add a name"
               onKeyDown={handleEnterToContinue}
+              onBlur={(e) => {
+                nameReg.onBlur(e)
+                setTouchedSteps((prev) => ({ ...prev, 2: true }))
+              }}
               className="min-h-[48px]"
             />
-            {errors.name && <p className="text-sm text-red-500">{errors.name.message}</p>}
+            {(shouldShowError(2) || nameDuplicate) && (nameDuplicate || getErrorMessage(errors.name)) && (
+              <p className="text-sm text-destructive">
+                {nameDuplicate ? "That name is already taken" : getErrorMessage(errors.name)}
+              </p>
+            )}
           </div>
         )
+
       case 3:
         return (
-          <div className="space-y-4" key={stepKey}>
+          <div className="space-y-4" key={stepKey as string}>
             <AutoGrowTextarea
-              {...register("role")}
+              {...roleReg}
+              ref={(el) => {
+                roleRegRef(el)
+                roleRef.current = el
+              }}
               placeholder="Add a role"
               onKeyDown={handleEnterToContinue}
+              onBlur={(e) => {
+                roleReg.onBlur(e)
+                setTouchedSteps((prev) => ({ ...prev, 3: true }))
+              }}
               className="min-h-[48px]"
             />
-            {errors.role && <p className="text-sm text-red-500">{errors.role.message}</p>}
+            {shouldShowError(3) && getErrorMessage(errors.role) && (
+              <p className="text-sm text-destructive">{getErrorMessage(errors.role)}</p>
+            )}
           </div>
         )
+
       case 4:
         return (
-          <div className="space-y-4" key={stepKey}>
+          <div className="space-y-3" key={stepKey as string}>
             <div className="flex gap-2 min-w-0">
               <AutoGrowTextarea
                 value={tagInput}
@@ -408,29 +682,30 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
                 }}
                 placeholder="Add a tag"
                 className="min-h-[48px] flex-1"
+                ref={tagInputRef}
               />
               <Button
                 type="button"
                 onClick={addTag}
-                className="h-12 w-12 bg-gray-100 border border-gray-200 rounded-lg"
+                className="h-12 w-12 bg-muted border border-border rounded-lg hover:bg-muted/80"
                 aria-label="Add tag"
               >
-                <Plus className="h-5 w-5 text-gray-600" />
+                <Plus className="h-5 w-5 text-muted-foreground" />
               </Button>
             </div>
+
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {tags.map((tag, i) => (
                   <div
                     key={`${tag}-${i}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-gray-500 text-white px-3 py-1 text-sm"
-                    data-tag
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-3 py-1 text-sm border border-primary/20"
                   >
                     <span className="break-words">{tag}</span>
                     <button
                       type="button"
                       onClick={() => removeTag(tag)}
-                      className="ml-1 inline-flex rounded-full p-0.5"
+                      className="ml-1 inline-flex rounded-full p-0.5 hover:bg-primary/20"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -438,80 +713,126 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
                 ))}
               </div>
             )}
+
+            {shouldShowError(4) && tags.length === 0 && (
+              <p className="text-sm text-destructive">At least one tag is needed</p>
+            )}
           </div>
         )
+
       case 5:
         return (
-          <div className="space-y-4" key={stepKey}>
+          <div className="space-y-4" key={stepKey as string}>
             <AutoGrowTextarea
-              {...register("description")}
+              {...descReg}
+              ref={(el) => {
+                descRegRef(el)
+                descRef.current = el
+              }}
               placeholder="Add a description"
               onKeyDown={handleEnterToContinue}
+              onBlur={(e) => {
+                descReg.onBlur(e)
+                setTouchedSteps((prev) => ({ ...prev, 5: true }))
+              }}
               className="min-h-[96px]"
             />
-            {errors.description && <p className="text-sm text-red-500">{errors.description.message}</p>}
+            {shouldShowError(5) && getErrorMessage(errors.description) && (
+              <p className="text-sm text-destructive">{getErrorMessage(errors.description)}</p>
+            )}
           </div>
         )
+
       case 6:
         return (
-          <div className="space-y-4" key={stepKey}>
+          <div className="space-y-4" key={stepKey as string}>
             <AutoGrowTextarea
-              {...register("location")}
+              {...locReg}
+              ref={(el) => {
+                locRegRef(el)
+                locationRef.current = el
+              }}
               placeholder="Add a venue"
               onKeyDown={handleEnterToContinue}
+              onBlur={(e) => {
+                locReg.onBlur(e)
+                setTouchedSteps((prev) => ({ ...prev, 6: true }))
+              }}
               className="min-h-[48px]"
             />
-            {errors.location && <p className="text-sm text-red-500">{errors.location.message}</p>}
+            {shouldShowError(6) && getErrorMessage(errors.location) && (
+              <p className="text-sm text-destructive">{getErrorMessage(errors.location)}</p>
+            )}
           </div>
         )
+
       case 7: {
         const imageUrl = watch("image_url")
         return (
-          <div className="space-y-4" key={stepKey}>
+          <div className="space-y-4" key={stepKey as string}>
             {!imageUrl ? (
-              <div className="flex flex-col items-center justify-center h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg">
-                <Upload className="h-8 w-8 text-gray-400 mb-2" />
-                <p className="text-sm text-gray-500">Drag and drop</p>
-                <p className="text-xs text-gray-400">or paste a URL below</p>
+              <div className="flex flex-col items-center justify-center h-32 bg-muted border-2 border-dashed border-border rounded-lg">
+                <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">Drag and drop</p> {/* doesnt work */}
+                <p className="text-xs text-muted-foreground/70">or paste a URL below</p>
               </div>
             ) : (
-              <div className="relative">
-      
-                <img src={imageUrl || "/something.png"} alt="Preview" className="w-full h-48 object-cover rounded-lg" />
+              <div className="relative overflow-hidden rounded-lg">
+                <img
+                  src={isValidUrl(imageUrl) ? imageUrl : "/image.png?height=192&width=400"} // (need placeholder)
+                  alt="Preview"
+                  className="w-full h-48 object-cover"
+                />
               </div>
             )}
             <Input
-              {...register("image_url")}
+              {...imgReg}
+              ref={(el) => {
+                imgRegRef(el)
+                imageUrlRef.current = el
+              }}
               placeholder="Paste image URL"
               type="url"
-              className="h-12 px-4 bg-gray-100 border-gray-200 rounded-lg placeholder:text-gray-500 w-full"
+              onBlur={(e) => {
+                imgReg.onBlur(e)
+                setTouchedSteps((prev) => ({ ...prev, 7: true }))
+                void trigger("image_url")
+              }}
+              className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
             />
-            {errors.image_url && <p className="text-sm text-red-500">{errors.image_url.message}</p>}
+            {shouldShowError(7) && getErrorMessage(errors.image_url) && (
+              <p className="text-sm text-destructive">{getErrorMessage(errors.image_url)}</p>
+            )}
           </div>
         )
       }
+
       case 8:
         return (
-          <div className="space-y-4" key={stepKey}>
-            <div className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 min-w-0">
+          <div className="space-y-3" key={stepKey as string}>
+            <div className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 min-w-0"> {/* no tailwind class would fit properly */}
               <Input
                 value={linkPlatformInput}
                 onChange={(e) => setLinkPlatformInput(e.target.value)}
                 placeholder="Platform"
-                className="h-12 px-4 bg-gray-100 border-gray-200 rounded-lg placeholder:text-gray-500 w-full"
+                className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault()
                     addLink()
                   }
                 }}
+                ref={linkPlatformRef}
               />
               <Input
                 value={linkUrlInput}
-                onChange={(e) => setLinkUrlInput(e.target.value)}
+                onChange={(e) => {
+                  setLinkUrlInput(e.target.value)
+                  if (linkInlineError) setLinkInlineError(null)
+                }}
                 placeholder="URL"
                 type="url"
-                className="h-12 px-4 bg-gray-100 border-gray-200 rounded-lg placeholder:text-gray-500 w-full"
+                className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault()
@@ -522,33 +843,32 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
               <Button
                 type="button"
                 onClick={addLink}
-                className="h-12 w-12 bg-gray-100 border border-gray-200 rounded-lg"
+                className="h-12 w-12 bg-muted border border-border rounded-lg hover:bg-muted/80"
                 aria-label="Add link"
               >
-                <Plus className="h-5 w-5 text-gray-600" />
+                <Plus className="h-5 w-5 text-muted-foreground" />
               </Button>
             </div>
 
-            {linkInlineError && <p className="text-sm text-red-500">{linkInlineError}</p>}
+            {linkInlineError && <p className="text-sm text-destructive">{linkInlineError}</p>}
 
             {links.length > 0 && (
               <div className="space-y-2">
                 {links.map((link, index) => (
                   <div
                     key={`${link.key}-${index}`}
-                    className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 p-3 bg-gray-100 rounded-lg w-full min-w-0"
-                    data-link
+                    className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 p-3 bg-muted/50 rounded-lg w-full min-w-0 border border-border/50" // no tailwind class would fit properly part two
                   >
                     <span className="text-sm font-medium min-w-0 truncate" title={link.key || "Platform"}>
                       {link.key || "Platform"}
                     </span>
-                    <span className="text-sm text-gray-600 min-w-0 truncate" title={link.value || "URL"}>
+                    <span className="text-sm text-muted-foreground min-w-0 truncate" title={link.value || "URL"}>
                       {link.value || "URL"}
                     </span>
                     <Button
                       type="button"
                       onClick={() => removeLink(index)}
-                      className="h-6 w-6 p-0 shrink-0"
+                      className="h-6 w-6 p-0 shrink-0 hover:bg-destructive/10 hover:text-destructive"
                       aria-label="Remove link"
                     >
                       <X className="h-3 w-3" />
@@ -557,29 +877,35 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
                 ))}
               </div>
             )}
+
+            {shouldShowError(8) && links.length === 0 && (
+              <p className="text-sm text-destructive">At least one link is needed</p>
+            )}
           </div>
         )
-      case 9:
+
+      case 9: // entire step is WIP 
         return (
-          <div className="space-y-4" key={stepKey}>
-            <div className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 min-w-0">
+          <div className="space-y-4" key={stepKey as string}>
+            <div className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 min-w-0"> {/* no tailwind class would fit properly part three */}
               <Input
                 value={profileKeyInput}
                 onChange={(e) => setProfileKeyInput(e.target.value)}
                 placeholder='Key (e.g. "capacity")'
-                className="h-12 px-4 bg-gray-100 border-gray-200 rounded-lg placeholder:text-gray-500 w-full"
+                className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault()
                     addProfilePair()
                   }
                 }}
+                ref={profileKeyRef}
               />
               <Input
                 value={profileValueInput}
                 onChange={(e) => setProfileValueInput(e.target.value)}
                 placeholder='Value (e.g. "2000")'
-                className="h-12 px-4 bg-gray-100 border-gray-200 rounded-lg placeholder:text-gray-500 w-full"
+                className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault()
@@ -590,10 +916,10 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
               <Button
                 type="button"
                 onClick={addProfilePair}
-                className="h-12 w-12 bg-gray-100 border border-gray-200 rounded-lg"
+                className="h-12 w-12 bg-muted border border-border rounded-lg hover:bg-muted/80"
                 aria-label="Add profile attribute"
               >
-                <Plus className="h-5 w-5 text-gray-600" />
+                <Plus className="h-5 w-5 text-muted-foreground" />
               </Button>
             </div>
 
@@ -602,19 +928,18 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
                 {profilePairs.map((pair, index) => (
                   <div
                     key={`${pair.key}-${index}`}
-                    className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 p-3 bg-gray-100 rounded-lg w-full min-w-0"
-                    data-profile
+                    className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 p-3 bg-muted/50 rounded-lg w-full min-w-0 border border-border/50"
                   >
                     <span className="text-sm font-medium min-w-0 truncate" title={pair.key || "Key"}>
                       {pair.key || "Key"}
                     </span>
-                    <span className="text-sm text-gray-600 min-w-0 truncate" title={pair.value || "Value"}>
+                    <span className="text-sm text-muted-foreground min-w-0 truncate" title={pair.value || "Value"}>
                       {pair.value || "Value"}
                     </span>
                     <Button
                       type="button"
                       onClick={() => removeProfilePair(index)}
-                      className="h-6 w-6 p-0 shrink-0"
+                      className="h-6 w-6 p-0 shrink-0 hover:bg-destructive/10 hover:text-destructive"
                       aria-label="Remove profile attribute"
                     >
                       <X className="h-3 w-3" />
@@ -625,76 +950,117 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
             )}
           </div>
         )
+
       default:
         return null
     }
   }
 
+  // i forgot why i liked this transition, mayber better ux/accesibility
+  
+  // const content = (
+  //  <AnimatePresence mode="popLayout" initial={false}>
+  //    <motion.div
+  //      key={currentStep}
+  //      initial={{ opacity: 0, scale: 0.97 }}
+  //      animate={{ opacity: 1, scale: 1 }}
+  //      exit={{ opacity: 0, scale: 0.97 }}
+  //      transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+  //    >
+  //       <div ref={ref}>{renderStepContent()}</div>
+  //     </motion.div>
+  //    </AnimatePresence> 
+  // )
+
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white rounded-4xl border-0">
-        <div className="w-full">
-          <DialogHeader className="px-6 py-6">
-            <div className="grid grid-cols-3 items-center">
-              <div className="justify-self-start">
-                {currentStep > 1 ? (
-                  <Button size="icon" onClick={goBack} className="h-8 w-8 rounded-full" variant={"secondary"}>
-                    <ArrowLeft className="h-4 w-4" />
+      <DialogContent className="p-0 bg-white rounded-[32px] shadow-2xl border overflow-hidden sm:max-w-sm">
+      <motion.div
+  initial={{ height: currentStep === 1 ? 570 : 600 }}          // using a hardcoded height for step 1 because i cant get the submit button to be referrenced by useMeasure
+  animate={{ height: currentStep === 1 ? 570 : bounds.height || 600 }}
+  transition={{ type: "spring", bounce: 0, duration: 0.35 }}
+  className="will-change-transform sm:max-w-md p-0 overflow-hidden"
+>
+          <div ref={ref} className="flex flex-col w-full">
+            
+            <DialogHeader className="border-b border-border/50 px-6 py-5 shrink-0">
+              <div className="grid grid-cols-3 items-center">
+                <div className="justify-self-start">
+                  {currentStep > 1 ? (
+                    <Button
+                      size="icon"
+                      onClick={goBack}
+                      className="h-8 w-8 rounded-full hover:bg-muted"
+                      variant="ghost"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <span className="h-8 w-8 inline-block" />
+                  )}
+                </div>
+                <DialogTitle className="justify-self-center text-base font-semibold text-foreground text-center">
+                  {steps[currentStep - 1].title}
+                </DialogTitle>
+                <div className="justify-self-end">
+                  <Button
+                    size="icon"
+                    onClick={() => handleClose(false)}
+                    className="h-8 w-8 rounded-full hover:bg-muted"
+                    variant="ghost"
+                  >
+                    <X className="h-4 w-4" />
                   </Button>
+                </div>
+              </div>
+            </DialogHeader>
+  
+            <div className="px-6 py-5 flex-1">
+              <AnimatePresence mode="popLayout" initial={false}>
+              <motion.div
+    key={currentStep}
+    initial={{ opacity: 0, scale: 0.97, filter: "blur(6px)" }}
+    animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+    exit={{ opacity: 0, scale: 0.97, filter: "blur(6px)" }}
+    transition={{ type: "spring", bounce: 0, duration: 0.35 }}
+  >
+                  {renderStepContent()}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+  
+            {submitError && (
+              <div className="mx-6 mb-3 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                {submitError}
+              </div>
+            )}
+  
+            <div className="px-6 pb-5 shrink-0">
+              <Button
+                onClick={goNext}
+                disabled={disableContinue}
+                className={`w-full h-12 rounded-full font-medium transition-all ${
+                  disableContinue
+                    ? "bg-muted text-muted-foreground cursor-not-allowed"
+                    : "bg-black text-white hover:bg-black/90 shadow-sm hover:shadow-md"
+                }`}
+              >
+                {isSubmitting ? (
+                  <span className="flex items-center">Creating...</span>
+                ) : currentStep === steps.length ? (
+                  "Create entity →"
                 ) : (
-                  <span className="h-8 w-8 inline-block" />
+                  "Continue →"
                 )}
-              </div>
-
-              <DialogTitle className="justify-self-center text-lg font-semibold text-black text-center">
-                {currentStepData.title}
-              </DialogTitle>
-
-              <div className="justify-self-end">
-                <Button
-                  size="icon"
-                  onClick={() => handleClose(false)}
-                  className="h-8 w-8 rounded-full"
-                  variant={"secondary"}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
+              </Button>
             </div>
-          </DialogHeader>
-
-          <div className="px-6 pb-6" key={stepKey}>
-            {renderStepContent()}
           </div>
-
-          {submitError && (
-            <div className="mx-6 mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-              {submitError}
-            </div>
-          )}
-
-          <div className="px-6 pb-6">
-            <Button
-              onClick={goNext}
-              disabled={disableContinue || isSubmitting}
-              className={`w-full h-12 rounded-lg font-medium ${
-                disableContinue ? "bg-gray-400 text-white" : "bg-black text-white"
-              }`}
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-white" />
-                  Creating...
-                </>
-              ) : currentStep === steps.length ? (
-                "Create entity →"
-              ) : (
-                "Continue →"
-              )}
-            </Button>
-          </div>
-        </div>
+        </motion.div>
       </DialogContent>
     </Dialog>
   )
+  
+  
+  
 }
