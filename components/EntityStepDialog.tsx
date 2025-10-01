@@ -28,7 +28,7 @@ type EntityFormData = z.infer<typeof EntitySchema> // infer data from zod schema
 const archetypes = [ // current list of archetypes (WIP)
   { value: "person", label: "Person" }, 
   { value: "group", label: "Group" },
-  { value: "venue", label: "Venue" },
+  { value: "venue", label: "Location" },
   { value: "organization", label: "Organization" },
   { value: "media", label: "Media" },
   { value: "event", label: "Event" },
@@ -89,7 +89,7 @@ const steps = [ // form steps configuration, optionality isnt nailed down
   { id: 3, title: "Role", field: "role", required: true },
   { id: 4, title: "Tags", field: "tags", required: true },
   { id: 5, title: "Description", field: "description", required: true },
-  { id: 6, title: "Venue", field: "Venue", required: true },
+  { id: 6, title: "Location", field: "Venue", required: true },
   { id: 7, title: "Image", field: "image_url", required: true },
   { id: 8, title: "Links", field: "links", required: true },
   { id: 9, title: "Attributes", field: "profile", required: false }, // attributes make more sense ()
@@ -762,7 +762,7 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
                 locRegRef(el)
                 locationRef.current = el
               }}
-              placeholder="Add a venue"
+              placeholder="Add a location"
               onKeyDown={handleEnterToContinue}
               onBlur={(e) => {
                 locReg.onBlur(e)
