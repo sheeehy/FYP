@@ -20,6 +20,8 @@ import { X, Plus, ArrowLeft, Upload } from "lucide-react"
 import type { z } from "zod"
 import { motion, AnimatePresence } from "framer-motion"
 import useMeasure from 'react-use-measure'
+import { cn } from "@/lib/utils"
+
 
 type EntityFormData = z.infer<typeof EntitySchema> // infer data from zod schema
 
@@ -90,7 +92,7 @@ const steps = [ // form steps configuration, optionality isnt nailed down
   { id: 6, title: "Venue", field: "Venue", required: true },
   { id: 7, title: "Image", field: "image_url", required: true },
   { id: 8, title: "Links", field: "links", required: true },
-  { id: 9, title: "Attributes", field: "profile", required: false }, // attributes make more sense
+  { id: 9, title: "Attributes", field: "profile", required: false }, // attributes make more sense ()
 ] as const
 
 export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDialogProps) {
@@ -585,29 +587,30 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
               control={control}
               render={({ field }) => (
                 <div className="space-y-2 relative">
-                  {archetypes.map((archetype, idx) => (
-                    <div key={archetype.value} className="relative">
-                      <Button
-                        type="button"
-                        className={`w-full h-12 justify-start text-left font-medium rounded-lg relative overflow-hidden ${
-                          field.value === archetype.value
-                            ? "bg-primary text-primary-foreground shadow-md"
-                            : "bg-muted text-muted-foreground hover:bg-muted/80"
-                        }`}
-                        onClick={() => {
-                          field.onChange(archetype.value)
-                          setActiveArchetype(archetype.value)
-                          setTouchedSteps((prev) => ({ ...prev, 1: true }))
-                          void trigger("archetype")
-                        }}
-                        ref={idx === 0 ? archetypeFirstBtnRef : undefined}
-                        onMouseEnter={() => setActiveArchetype(archetype.value)}
-                        onMouseLeave={() => setActiveArchetype((field.value as string) || null)}
-                      >
-                        <span className="relative z-10">{archetype.label}</span>
-                      </Button>
-                    </div>
-                  ))}
+                {archetypes.map((archetype, idx) => {
+  const selected = field.value === archetype.value
+  return (
+    <div key={archetype.value} className="relative">
+      <Button
+        type="button"
+        variant={selected ? "default" : "secondary"}
+        aria-pressed={selected}
+        className="w-full h-12 justify-start text-left font-medium rounded-lg relative overflow-hidden"
+        onClick={() => {
+          field.onChange(archetype.value)
+          setActiveArchetype(archetype.value)
+          setTouchedSteps((prev) => ({ ...prev, 1: true }))
+          void trigger("archetype")
+        }}
+        ref={idx === 0 ? archetypeFirstBtnRef : undefined}
+        onMouseEnter={() => setActiveArchetype(archetype.value)}
+        onMouseLeave={() => setActiveArchetype((field.value as string) || null)}
+      >
+        <span className="relative z-10">{archetype.label}</span>
+      </Button>
+    </div>
+  )
+})}
                 </div>
               )}
             />
@@ -668,7 +671,7 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
       case 4:
         return (
           <div className="space-y-3" key={stepKey as string}>
-            <div className="flex gap-2 min-w-0">
+            <div className="flex gap-2 min-w-0 ">
               <AutoGrowTextarea
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
@@ -684,36 +687,43 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
                 className="min-h-[48px] flex-1"
                 ref={tagInputRef}
               />
-              <Button
-                type="button"
-                onClick={addTag}
-                className="h-12 w-12 bg-muted border border-border rounded-lg hover:bg-muted/80"
-                aria-label="Add tag"
-              >
-                <Plus className="h-5 w-5 text-muted-foreground" />
-              </Button>
+            <Button
+  type="button"
+  onClick={addTag}
+  variant={tagInput.trim() ? "default" : "secondary"}
+  disabled={!tagInput.trim()}
+  className="h-12 w-12 rounded-lg border border-border"
+  aria-label="Add tag"
+>
+  <Plus
+    className={cn(
+      "h-5 w-5 transition-colors",
+      tagInput.trim() ? "text-primary-foreground" : "text-muted-foreground"
+    )}
+  />
+</Button>
             </div>
-
+        
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {tags.map((tag, i) => (
                   <div
                     key={`${tag}-${i}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-3 py-1 text-sm border border-primary/20"
+                    className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-3 py-1 text-sm border border-border"
                   >
                     <span className="break-words">{tag}</span>
                     <button
-                      type="button"
-                      onClick={() => removeTag(tag)}
-                      className="ml-1 inline-flex rounded-full p-0.5 hover:bg-primary/20"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+  type="button"
+  onClick={() => removeTag(tag)}
+  className="ml-1 inline-flex rounded-full p-0.5 hover:bg-destructive/10 hover:text-destructive transition-colors"
+>
+  <X className="h-3 w-3" />
+</button>
                   </div>
                 ))}
               </div>
             )}
-
+        
             {shouldShowError(4) && tags.length === 0 && (
               <p className="text-sm text-destructive">At least one tag is needed</p>
             )}
@@ -766,190 +776,285 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
           </div>
         )
 
-      case 7: {
-        const imageUrl = watch("image_url")
-        return (
-          <div className="space-y-4" key={stepKey as string}>
-            {!imageUrl ? (
-              <div className="flex flex-col items-center justify-center h-32 bg-muted border-2 border-dashed border-border rounded-lg">
-                <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">Drag and drop</p> {/* doesnt work */}
-                <p className="text-xs text-muted-foreground/70">or paste a URL below</p>
-              </div>
-            ) : (
-              <div className="relative overflow-hidden rounded-lg">
-                <img
-                  src={isValidUrl(imageUrl) ? imageUrl : "/image.png?height=192&width=400"} // (need placeholder)
-                  alt="Preview"
-                  className="w-full h-48 object-cover"
-                />
-              </div>
-            )}
-            <Input
-              {...imgReg}
-              ref={(el) => {
-                imgRegRef(el)
-                imageUrlRef.current = el
-              }}
-              placeholder="Paste image URL"
-              type="url"
-              onBlur={(e) => {
-                imgReg.onBlur(e)
-                setTouchedSteps((prev) => ({ ...prev, 7: true }))
-                void trigger("image_url")
-              }}
-              className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
-            />
-            {shouldShowError(7) && getErrorMessage(errors.image_url) && (
-              <p className="text-sm text-destructive">{getErrorMessage(errors.image_url)}</p>
-            )}
-          </div>
-        )
-      }
-
-      case 8:
-        return (
-          <div className="space-y-3" key={stepKey as string}>
-            <div className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 min-w-0"> {/* no tailwind class would fit properly */}
-              <Input
-                value={linkPlatformInput}
-                onChange={(e) => setLinkPlatformInput(e.target.value)}
-                placeholder="Platform"
-                className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+        case 7: { // WIP
+                  // image upload doesnt work, replace image doesnt work, ratio is off
+          const imageUrl = watch("image_url")
+        
+          const onFile = (file?: File) => {
+            if (!file) return
+            const reader = new FileReader()
+            reader.onload = () => {
+              const v = typeof reader.result === "string" ? reader.result : ""
+              setValue("image_url", v, { shouldValidate: true, shouldDirty: true })
+              setTouchedSteps((p) => ({ ...p, 7: true }))
+              void trigger("image_url")
+            }
+            reader.readAsDataURL(file)
+          }
+        
+          return (
+            <div className="space-y-4" key={stepKey as string}>
+              {!imageUrl ? (
+                <label
+                  htmlFor="image-file"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
                     e.preventDefault()
-                    addLink()
-                  }
-                }}
-                ref={linkPlatformRef}
-              />
+                    const f = e.dataTransfer.files?.[0]
+                    if (f && f.type.startsWith("image/")) onFile(f)
+                  }}
+                  onPaste={(e) => {
+                    const items = e.clipboardData?.files
+                    if (items && items[0] && items[0].type.startsWith("image/")) onFile(items[0])
+                  }}
+                  className="relative flex flex-col items-center justify-center aspect-square w-full rounded-lg border-2 border-dashed border-border bg-muted/50 hover:bg-muted/70 transition-colors cursor-pointer"
+                  aria-label="Upload image"
+                >
+                  <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">Drag & drop or click to upload</p>
+                  <p className="text-xs text-muted-foreground/70">or paste an image / URL below</p>
+                  <input
+                    id="image-file"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => onFile(e.target.files?.[0])}
+                  />
+                </label>
+              ) : (
+                <div className="relative aspect-square w-full overflow-hidden rounded-lg border border-border">
+                  <img
+                    src={isValidUrl(imageUrl) ? imageUrl : "/image.png"}
+                    alt="Preview"
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 right-2 flex gap-2">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="secondary"
+                      className="h-8 w-8 rounded-full"
+                      onClick={() => {
+                        const input = document.getElementById("image-file") as HTMLInputElement | null
+                        input?.click()
+                      }}
+                      aria-label="Replace image"
+                    >
+                      <Upload className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="destructive"
+                      className="h-8 w-8 rounded-full"
+                      onClick={() => setValue("image_url", "", { shouldDirty: true })}
+                      aria-label="Remove image"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+        
               <Input
-                value={linkUrlInput}
-                onChange={(e) => {
-                  setLinkUrlInput(e.target.value)
-                  if (linkInlineError) setLinkInlineError(null)
+                {...imgReg}
+                ref={(el) => {
+                  imgRegRef(el)
+                  imageUrlRef.current = el
                 }}
-                placeholder="URL"
+                placeholder="Paste image URL"
                 type="url"
+                onBlur={(e) => {
+                  imgReg.onBlur(e)
+                  setTouchedSteps((prev) => ({ ...prev, 7: true }))
+                  void trigger("image_url")
+                }}
                 className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault()
-                    addLink()
+                    void trigger("image_url")
                   }
                 }}
               />
-              <Button
-                type="button"
-                onClick={addLink}
-                className="h-12 w-12 bg-muted border border-border rounded-lg hover:bg-muted/80"
-                aria-label="Add link"
-              >
-                <Plus className="h-5 w-5 text-muted-foreground" />
-              </Button>
+        
+              {shouldShowError(7) && getErrorMessage(errors.image_url) && (
+                <p className="text-sm text-destructive">{getErrorMessage(errors.image_url)}</p>
+              )}
             </div>
-
-            {linkInlineError && <p className="text-sm text-destructive">{linkInlineError}</p>}
-
-            {links.length > 0 && (
-              <div className="space-y-2">
-                {links.map((link, index) => (
-                  <div
-                    key={`${link.key}-${index}`}
-                    className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 p-3 bg-muted/50 rounded-lg w-full min-w-0 border border-border/50" // no tailwind class would fit properly part two
-                  >
-                    <span className="text-sm font-medium min-w-0 truncate" title={link.key || "Platform"}>
-                      {link.key || "Platform"}
-                    </span>
-                    <span className="text-sm text-muted-foreground min-w-0 truncate" title={link.value || "URL"}>
-                      {link.value || "URL"}
-                    </span>
-                    <Button
-                      type="button"
-                      onClick={() => removeLink(index)}
-                      className="h-6 w-6 p-0 shrink-0 hover:bg-destructive/10 hover:text-destructive"
-                      aria-label="Remove link"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
+          )
+        }
+        
+        case 8:
+          return (
+            <div className="space-y-3" key={stepKey as string}>
+              <div className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 min-w-0">
+                <Input
+                  value={linkPlatformInput}
+                  onChange={(e) => setLinkPlatformInput(e.target.value)}
+                  placeholder="Platform"
+                  className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      addLink()
+                    }
+                  }}
+                  ref={linkPlatformRef}
+                />
+                <Input
+                  value={linkUrlInput}
+                  onChange={(e) => {
+                    setLinkUrlInput(e.target.value)
+                    if (linkInlineError) setLinkInlineError(null)
+                  }}
+                  placeholder="URL"
+                  type="url"
+                  className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      addLink()
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  onClick={addLink}
+                  variant={linkPlatformInput.trim() && isValidUrl(linkUrlInput.trim()) ? "default" : "secondary"}
+                  disabled={!linkPlatformInput.trim() || !isValidUrl(linkUrlInput.trim())}
+                  className="h-12 w-12 rounded-lg border border-border"
+                  aria-label="Add link"
+                >
+                  <Plus
+                    className={cn(
+                      "h-5 w-5 transition-colors",
+                      linkPlatformInput.trim() && isValidUrl(linkUrlInput.trim())
+                        ? "text-primary-foreground"
+                        : "text-muted-foreground"
+                    )}
+                  />
+                </Button>
               </div>
-            )}
-
-            {shouldShowError(8) && links.length === 0 && (
-              <p className="text-sm text-destructive">At least one link is needed</p>
-            )}
-          </div>
-        )
-
-      case 9: // entire step is WIP 
-        return (
-          <div className="space-y-4" key={stepKey as string}>
-            <div className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 min-w-0"> {/* no tailwind class would fit properly part three */}
-              <Input
-                value={profileKeyInput}
-                onChange={(e) => setProfileKeyInput(e.target.value)}
-                placeholder='Key'
-                className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    addProfilePair()
-                  }
-                }}
-                ref={profileKeyRef}
-              />
-              <Input
-                value={profileValueInput}
-                onChange={(e) => setProfileValueInput(e.target.value)}
-                placeholder='Value'
-                className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    addProfilePair()
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                onClick={addProfilePair}
-                className="h-12 w-12 bg-muted border border-border rounded-lg hover:bg-muted/80"
-                aria-label="Add profile attribute"
-              >
-                <Plus className="h-5 w-5 text-muted-foreground" />
-              </Button>
+        
+              {linkInlineError && <p className="text-sm text-destructive">{linkInlineError}</p>}
+        
+              {links.length > 0 && (
+                <div className="space-y-2">
+                  {links.map((link, index) => (
+                    <div
+                      key={`${link.key}-${index}`}
+                      className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 px-3 py-2 rounded-lg w-full min-w-0 border border-border bg-secondary text-secondary-foreground"
+                    >
+                      <span
+                        className="text-sm font-medium min-w-0 truncate"
+                        title={link.key || "Platform"}
+                      >
+                        {link.key || "Platform"}
+                      </span>
+                      <span
+                        className="text-sm min-w-0 truncate text-muted-foreground"
+                        title={link.value || "URL"}
+                      >
+                        {link.value || "URL"}
+                      </span>
+                      <Button
+                        type="button"
+                        onClick={() => removeLink(index)}
+                        variant="ghost"
+                        className="h-6 w-6 p-0 shrink-0 hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        aria-label="Remove link"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+        
+              {shouldShowError(8) && links.length === 0 && (
+                <p className="text-sm text-destructive">At least one link is needed</p>
+              )}
             </div>
-
-            {profilePairs.length > 0 && (
-              <div className="space-y-2">
-                {profilePairs.map((pair, index) => (
-                  <div
-                    key={`${pair.key}-${index}`}
-                    className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 p-3 bg-muted/50 rounded-lg w-full min-w-0 border border-border/50"
-                  >
-                    <span className="text-sm font-medium min-w-0 truncate" title={pair.key || "Key"}>
-                      {pair.key || "Key"}
-                    </span>
-                    <span className="text-sm text-muted-foreground min-w-0 truncate" title={pair.value || "Value"}>
-                      {pair.value || "Value"}
-                    </span>
-                    <Button
-                      type="button"
-                      onClick={() => removeProfilePair(index)}
-                      className="h-6 w-6 p-0 shrink-0 hover:bg-destructive/10 hover:text-destructive"
-                      aria-label="Remove profile attribute"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
+          )
+        
+          case 9: // WIP
+          return (
+            <div className="space-y-4" key={stepKey as string}>
+              <div className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 min-w-0">
+                <Input
+                  value={profileKeyInput}
+                  onChange={(e) => setProfileKeyInput(e.target.value)}
+                  placeholder="Key"
+                  className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      addProfilePair()
+                    }
+                  }}
+                  ref={profileKeyRef}
+                />
+                <Input
+                  value={profileValueInput}
+                  onChange={(e) => setProfileValueInput(e.target.value)}
+                  placeholder="Value"
+                  className="h-12 px-4 bg-muted border-border rounded-lg placeholder:text-muted-foreground w-full"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      addProfilePair()
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  onClick={addProfilePair}
+                  variant={profileKeyInput.trim() && profileValueInput.trim() ? "default" : "secondary"}
+                  disabled={!profileKeyInput.trim() || !profileValueInput.trim()}
+                  className="h-12 w-12 rounded-lg border border-border"
+                  aria-label="Add profile attribute"
+                >
+                  <Plus
+                    className={cn(
+                      "h-5 w-5 transition-colors",
+                      profileKeyInput.trim() && profileValueInput.trim()
+                        ? "text-primary-foreground"
+                        : "text-muted-foreground"
+                    )}
+                  />
+                </Button>
               </div>
-            )}
-          </div>
-        )
+        
+              {profilePairs.length > 0 && (
+                <div className="space-y-2">
+                  {profilePairs.map((pair, index) => (
+                    <div
+                      key={`${pair.key}-${index}`}
+                      className="grid grid-cols-[1fr_1.6fr_auto] items-center gap-2 px-3 py-2 rounded-lg w-full min-w-0 border border-border bg-secondary text-secondary-foreground"
+                    >
+                      <span className="text-sm font-medium min-w-0 truncate" title={pair.key || "Key"}>
+                        {pair.key || "Key"}
+                      </span>
+                      <span className="text-sm min-w-0 truncate text-muted-foreground" title={pair.value || "Value"}>
+                        {pair.value || "Value"}
+                      </span>
+                      <Button
+                        type="button"
+                        onClick={() => removeProfilePair(index)}
+                        variant="ghost"
+                        className="h-6 w-6 p-0 shrink-0 hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        aria-label="Remove profile attribute"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        
 
       default:
         return null
