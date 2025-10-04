@@ -12,13 +12,13 @@ interface Entity {
   id: string
   name: string
   archetype: string
-  role?: string
-  tags: string[]
-  description?: string
-  location?: string
-  image_url?: string
-  links?: Record<string, string>
-  profile?: Record<string, any>
+  role?: string | null
+  tags?: string[] | null
+  description?: string | null
+  location?: string | null
+  image_url?: string | null
+  links?: Record<string, string> | null
+  profile?: Record<string, any> | null
   created_at: string
   updated_at: string
 }
@@ -28,11 +28,11 @@ function EntitiesList({ entities }: { entities: Entity[] }) {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {entities.map((entity) => (
         <Card key={entity.id} className="overflow-hidden">
-          {entity.image_url && (
+          {entity.image_url ? (
             <div className="relative w-full h-40 bg-gray-100 rounded-t-lg overflow-hidden">
-              <Image src={entity.image_url || "/placeholder.svg"} alt={entity.name} fill className="object-cover" />
+              <Image src={entity.image_url} alt={entity.name} fill className="object-cover" />
             </div>
-          )}
+          ) : null}
           <CardHeader>
             <div className="flex items-start justify-between">
               <div>
@@ -51,24 +51,24 @@ function EntitiesList({ entities }: { entities: Entity[] }) {
 
             {entity.location && <p className="text-xs text-muted-foreground mb-2">📍 {entity.location}</p>}
 
-            {entity.tags.length > 0 && (
+            {(entity.tags ?? []).length > 0 && (
               <div className="flex flex-wrap gap-1 mb-3">
-                {entity.tags.slice(0, 3).map((tag, index) => (
+                {(entity.tags ?? []).slice(0, 3).map((tag, index) => (
                   <Badge key={index} variant="outline" className="text-xs">
                     {tag}
                   </Badge>
                 ))}
-                {entity.tags.length > 3 && (
+                {(entity.tags ?? []).length > 3 && (
                   <Badge variant="outline" className="text-xs">
-                    +{entity.tags.length - 3}
+                    +{(entity.tags ?? []).length - 3}
                   </Badge>
                 )}
               </div>
             )}
 
-            {entity.links && Object.keys(entity.links).length > 0 && (
+            {entity.links && Object.keys(entity.links ?? {}).length > 0 && (
               <div className="flex gap-2">
-                {Object.entries(entity.links)
+                {Object.entries(entity.links ?? {})
                   .slice(0, 2)
                   .map(([key, url]) => (
                     <a

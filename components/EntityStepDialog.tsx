@@ -16,8 +16,8 @@ import { EntitySchema } from "@/lib/validation/entity"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { X, Plus, ArrowLeft, Upload, ArrowRight } from "lucide-react"
-import type { z } from "zod"
+import { X, Plus, ArrowLeft, Upload, ArrowRight, Star } from "lucide-react"
+import { any, type z } from "zod"
 import { motion, AnimatePresence } from "framer-motion"
 import useMeasure from 'react-use-measure'
 import { cn } from "@/lib/utils"
@@ -85,7 +85,7 @@ AutoGrowTextarea.displayName = "AutoGrowTextarea"
 
 const steps = [ // form steps configuration, optionality isnt nailed down
   { id: 1, title: "Archetype", field: "archetype", required: true },
-  { id: 2, title: "Name", field: "name", required: true },
+  { id: 2, title: "Name", field: "name", required: true }, 
   { id: 3, title: "Role", field: "role", required: true },
   { id: 4, title: "Tags", field: "tags", required: true },
   { id: 5, title: "Description", field: "description", required: true },
@@ -190,15 +190,15 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
   const focusCurrentStep = () => { // focus the correct input when the step changes / probably a better way to do this natively with shadcn
     requestAnimationFrame(() => {
       switch (currentStep) {
-        case 1: archetypeFirstBtnRef.current?.focus(); break
-        case 2: nameRef.current?.focus(); break
-        case 3: roleRef.current?.focus(); break
-        case 4: tagInputRef.current?.focus(); break
-        case 5: descRef.current?.focus(); break
-        case 6: locationRef.current?.focus(); break
-        case 7: imageUrlRef.current?.focus(); break
-        case 8: linkPlatformRef.current?.focus(); break
-        case 9: profileKeyRef.current?.focus(); break
+        case 1:  archetypeFirstBtnRef.current?.focus(); break
+        case 2:  nameInputInlineRef.current?.focus(); break
+        case 3:  roleRef.current?.focus(); break
+        case 4:  tagInputRef.current?.focus(); break
+        case 5:  descRef.current?.focus(); break
+        case 6:  locationRef.current?.focus(); break
+        case 7:  imageUrlRef.current?.focus(); break
+        case 8:  linkPlatformRef.current?.focus(); break
+        case 9:  profileKeyRef.current?.focus(); break
       }
     })
   }
@@ -259,6 +259,84 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
       return false
     }
   }
+
+
+  
+  const [aliases, setAliases] = useState<Array<{ alias: string; context?: string; is_primary?: boolean }>>([])
+  const [aliasInput, setAliasInput] = useState("")
+  const [aliasContextInput, setAliasContextInput] = useState("")
+  const [aliasInlineError, setAliasInlineError] = useState<string | null>(null)
+  const aliasInputRef = useRef<HTMLInputElement | null>(null)
+  const normalize = (s: string) =>
+    s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim()
+  
+  const addAlias = () => {
+    const a = aliasInput.trim()
+    if (!a) return
+    if (aliases.some(x => normalize(x.alias) === normalize(a))) {
+      setAliasInlineError("Alias already added")
+      return
+    }
+    setAliases(prev => [...prev, { alias: a, context: aliasContextInput.trim() || undefined, is_primary: false }])
+    setAliasInput("")
+    setAliasContextInput("")
+    setAliasInlineError(null)
+  }
+
+  const removeAlias = (i: number) => setAliases(prev => prev.filter((_, idx) => idx !== i))
+
+  const setPrimaryAlias = (i: number) =>
+    setAliases(prev => prev.map((x, idx) => ({ ...x, is_primary: idx === i })))
+
+
+  const [names, setNames] = useState<string[]>([])
+  const [primaryIdx, setPrimaryIdx] = useState<number | null>(null)
+  const [nameInputInline, setNameInputInline] = useState("")
+  const nameInputInlineRef = useRef<HTMLInputElement | null>(null)
+  
+  const normalizeName = (s: string) =>
+    s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim()
+  
+  const addNameToList = () => {
+    const v = nameInputInline.trim()
+    if (!v) return
+    if (names.some(n => normalizeName(n) === normalizeName(v))) return
+    const next = [...names, v]
+    setNames(next)
+    setNameInputInline("")
+    if (primaryIdx === null) {
+      setPrimaryIdx(0)
+      setValue("name", v, { shouldValidate: true, shouldDirty: true })
+    } else {
+      setValue("name", next[primaryIdx], { shouldValidate: true, shouldDirty: true })
+    }
+  }
+  
+  const removeNameFromList = (i: number) => {
+    const next = names.filter((_, idx) => idx !== i)
+    setNames(next)
+    if (primaryIdx === null) {
+      setValue("name", "", { shouldValidate: true, shouldDirty: true })
+      return
+    }
+    if (i === primaryIdx) {
+      const newIdx = next.length ? 0 : null
+      setPrimaryIdx(newIdx)
+      setValue("name", newIdx !== null ? next[newIdx] : "", { shouldValidate: true, shouldDirty: true })
+    } else if (i < primaryIdx) {
+      const newIdx = primaryIdx - 1
+      setPrimaryIdx(newIdx)
+      setValue("name", next[newIdx], { shouldValidate: true, shouldDirty: true })
+    } else {
+      setValue("name", next[primaryIdx], { shouldValidate: true, shouldDirty: true })
+    }
+  }
+  
+  const makePrimary = (i: number) => {
+    setPrimaryIdx(i) 
+    setValue("name", names[i] ?? "", { shouldValidate: true, shouldDirty: true })
+  }
+
 
   const addTag = () => { // add tag from input
     const t = tagInput.trim().toLowerCase()
@@ -335,21 +413,37 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
     setValue("profile", toObject(next), { shouldDirty: true, shouldTouch: true, shouldValidate: true })
   }
 
+  const aliasSetRef = useRef<Set<string> | null>(null)
+  const normalizeAlias = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+
+    
+
   // check slug availability and cache it
   const ensureSlugSet = async () => {
-    if (slugSetRef.current || loadingSlugsRef.current) return
+    if ((slugSetRef.current && aliasSetRef.current) || loadingSlugsRef.current) return
     loadingSlugsRef.current = true
     try {
       const res = await fetch("/api/entities", { headers: { "Content-Type": "application/json" } })
       if (!res.ok) throw new Error("Failed")
-      const entities = (await res.json()) as Array<{ slug?: string; name?: string }>
+      const entities = (await res.json()) as Array<{
+        slug?: string; name?: string;
+        entity_aliases?: { alias: string }[]
+      }>
       slugSetRef.current = new Set(
-        (entities || [])
-          .map((e) => (e.slug || slugify(e.name || "")).trim())
-          .filter(Boolean),
+        (entities || []).map(e => (e.slug || slugify(e.name || "")).trim()).filter(Boolean),
+      )
+      aliasSetRef.current = new Set(
+        (entities || []).flatMap(e => (e.entity_aliases || []).map(a => normalizeAlias(a.alias))).filter(Boolean),
       )
     } catch {
       slugSetRef.current = null
+      aliasSetRef.current = null
     } finally {
       loadingSlugsRef.current = false
     }
@@ -365,48 +459,45 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
   const nameValue = watch("name") // live name duplicate check, disables button immediately and clears as user fixes
   const nameDebounceRef = useRef<number | null>(null)
   useEffect(() => {
-    if (nameDebounceRef.current) {
-      window.clearTimeout(nameDebounceRef.current)
-      nameDebounceRef.current = null
-    }
-    const n = (nameValue || "").trim()
-    if (!n) {
-      setNameDuplicate(false)
-      setNameChecking(false)
-      if (getErrorMessage(errors.name) === "That name is already taken") clearErrors("name")
+    if (nameDebounceRef.current) { window.clearTimeout(nameDebounceRef.current); nameDebounceRef.current = null }
+    const primary = primaryIdx !== null ? (names[primaryIdx] ?? "").trim() : ""
+    if (!primary) {
+      setNameDuplicate(false); setNameChecking(false)
+      if (getErrorMessage(errors.name)) clearErrors("name")
       return
     }
     setNameChecking(true)
     nameDebounceRef.current = window.setTimeout(async () => {
-      const slug = slugify(n)
+      const slug = slugify(primary)
       const taken = await isSlugTaken(slug)
-      setNameDuplicate(taken)
-      setNameChecking(false)
-      if (taken) {
-        setError("name", { type: "validate", message: "That name is already taken" })
-      } else if (getErrorMessage(errors.name) === "That name is already taken") {
-        clearErrors("name")
+      const aliasHit = aliasSetRef.current?.has(normalizeAlias(primary)) ?? false
+      if (aliasHit) {
+        setError("name", { type: "validate", message: "Name matches an existing alias" })
+        setNameDuplicate(true); setNameChecking(false); return
       }
+      setNameDuplicate(taken); setNameChecking(false)
+      if (taken) setError("name", { type: "validate", message: "That name is already taken" })
+      else if (getErrorMessage(errors.name)) clearErrors("name")
     }, 250)
     return () => {
-      if (nameDebounceRef.current) {
-        window.clearTimeout(nameDebounceRef.current)
-        nameDebounceRef.current = null
-      }
+      if (nameDebounceRef.current) { window.clearTimeout(nameDebounceRef.current); nameDebounceRef.current = null }
     }
-  }, [nameValue])
+  }, [names, primaryIdx])
+
 
   const validateCurrentStep = async (): Promise<boolean> => { // validate steps
     setTouchedSteps((prev) => ({ ...prev, [currentStep]: true })) // each step has slightly different validations but theyre straight forward
     switch (currentStep) { // also, as of now, zod, prisma and client have slightly different variations (gulp)
       case 1: return await trigger("archetype", { shouldFocus: true })
       case 2: {
-        const ok = await trigger("name", { shouldFocus: true })
-        if (!ok) return false
-        const n = (getValues("name") || "").trim()
-        if (!n) return false
+        if (primaryIdx === null || !names[primaryIdx]?.trim()) {
+          setError("name", { type: "required", message: "Add at least one name" })
+          return false
+        }
+        const primary = names[primaryIdx].trim()
+        setValue("name", primary, { shouldValidate: true, shouldDirty: true })
         if (nameChecking) {
-          const slug = slugify(n)
+          const slug = slugify(primary)
           const taken = await isSlugTaken(slug)
           setNameDuplicate(taken)
           if (taken) {
@@ -419,39 +510,20 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
       }
       case 3: return await trigger("role", { shouldFocus: true })
       case 4: {
-        if (tags.length === 0) {
-          setError("tags", { type: "required", message: "At least one tag is required" })
-          tagInputRef.current?.focus()
-          return false
-        }
-        clearErrors("tags")
-        return true
+        if (tags.length === 0) { setError("tags", { type: "required", message: "At least one tag is required" }); tagInputRef.current?.focus(); return false }
+        clearErrors("tags"); return true
       }
       case 5: return await trigger("description", { shouldFocus: true })
       case 6: return await trigger("location", { shouldFocus: true })
       case 7: {
         const val = getValues("image_url")?.trim()
-        if (!val) {
-          setError("image_url", { type: "required", message: "Image URL is required" })
-          imageUrlRef.current?.focus()
-          return false
-        }
-        if (!isValidUrl(val)) {
-          setError("image_url", { type: "validate", message: "Image URL must be a valid URL" })
-          imageUrlRef.current?.focus()
-          return false
-        }
-        clearErrors("image_url")
-        return true
+        if (!val) { setError("image_url", { type: "required", message: "Image URL is required" }); imageUrlRef.current?.focus(); return false }
+        if (!isValidUrl(val)) { setError("image_url", { type: "validate", message: "Image URL must be a valid URL" }); imageUrlRef.current?.focus(); return false }
+        clearErrors("image_url"); return true
       }
       case 8: {
-        if (links.length === 0) {
-          setError("links" as any, { type: "required", message: "At least one link is required" } as any)
-          linkPlatformRef.current?.focus()
-          return false
-        }
-        clearErrors("links" as any)
-        return true
+        if (links.length === 0) { setError("links" as any, { type: "required", message: "At least one link is required" } as any); linkPlatformRef.current?.focus(); return false }
+        clearErrors("links" as any); return true
       }
       case 9: return true
       default: return true
@@ -476,51 +548,51 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
     setIsSubmitting(true)
     setSubmitError(null)
     try {
-      const cleanedTags = Array.from(new Set((tags ?? []).map((t) => t.toLowerCase().trim()).filter(Boolean)))
-      data.tags = cleanedTags as any // clean tags
-
-      const linksObj = toObject(links)
-      if (linksObj) { // validate links
-        for (const [, v] of Object.entries(linksObj)) {
-          if (!isValidUrl(v)) throw new Error("One or more links are not valid URLs")
-        }
+      if (primaryIdx === null || !names[primaryIdx]?.trim()) {
+        setCurrentStep(2)
+        setError("name", { type: "required", message: "Add at least one name" })
+        throw new Error("Add at least one name")
       }
-      data.links = linksObj as any
-      data.profile = toObject(profilePairs) as any
-
-      const img = (data.image_url || "").trim() // validate img is url (WIP)
-      if (!img) throw new Error("Image URL is required")
-      if (!isValidUrl(img)) throw new Error("Image URL must be a valid URL")
-
-        // will need to implement drag and drop, file uploads eventually
-        // probably will use UploadThing and a drag and drop component
-
-      const name = (data.name || "").trim() // generate slug from name
-      const slug = slugify(name)
+      data.name = names[primaryIdx].trim()
+  
+      const slug = slugify(data.name)
       ;(data as any).slug = slug
-
-      if (await isSlugTaken(slug)) { // check not duplicate
+      if (await isSlugTaken(slug)) {
         setCurrentStep(2)
         setNameDuplicate(true)
         setError("name", { type: "validate", message: "That name is already taken" })
         throw new Error("That name is already taken")
       }
-
-      const res = await fetch("/api/entities", { // post
+  
+      const cleanedTags = Array.from(new Set((tags ?? []).map(t => t.toLowerCase().trim()).filter(Boolean)))
+      data.tags = cleanedTags as any
+  
+      const linksObj = toObject(links)
+      if (linksObj) for (const [, v] of Object.entries(linksObj)) if (!isValidUrl(v)) throw new Error("One or more links are not valid URLs")
+      data.links = linksObj as any
+      data.profile = toObject(profilePairs) as any
+  
+      const img = (data.image_url || "").trim()
+      if (!img) throw new Error("Image URL is required")
+      if (!isValidUrl(img)) throw new Error("Image URL must be a valid URL")
+  
+      const cleanedAliases = names
+        .map((n, i) => ({ alias: n.trim(), idx: i }))
+        .filter(x => x.idx !== primaryIdx)
+        .map(x => ({ alias: x.alias, is_primary: false }))
+  
+      const res = await fetch("/api/entities", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, aliases: cleanedAliases }),
       })
       if (!res.ok) {
         let msg = "Failed to create entity"
-        try {
-          const j = await res.json()
-          if (j?.error) msg = j.error
-        } catch {}
+        try { const j = await res.json(); if (j?.error) msg = j.error } catch {}
         throw new Error(msg)
       }
-
-      slugSetRef.current = null // reset cache and form after success
+  
+      slugSetRef.current = null
       resetForm()
       onOpenChange(false)
       onSuccess?.()
@@ -550,11 +622,11 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
       case 6: return Boolean((watch("location") || "").trim())
       case 7: return Boolean((watch("image_url") || "").trim())
       case 8: return links.length > 0
-      case 9: return true
+      case 9: return true 
       default: return false
     }
   }
-
+  
   const isStepValid = (id: number): boolean => {
     if (!isStepFilled(id)) return false
     switch (id) {
@@ -620,23 +692,75 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
           </div>
         )
 
-      case 2:
-        return (
-          <div className="space-y-2" key={stepKey as string}>
-            <AutoGrowTextarea
-              {...nameReg}
-              ref={(el) => {
-                nameRegRef(el)
-                nameRef.current = el
-              }}
-              placeholder="Add a name"
-              onKeyDown={handleEnterToContinue}
-              onBlur={(e) => {
-                nameReg.onBlur(e)
-                setTouchedSteps((prev) => ({ ...prev, 2: true }))
-              }}
-              className="min-h-[48px]"
-            />
+        case 2:
+          return (
+            <div className="space-y-4" key={stepKey as string}>
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <Input
+                value={nameInputInline}
+                onChange={(e) => setNameInputInline(e.target.value)}
+                placeholder="Add a name"
+                className="h-12 transition-colors hover:border-foreground/30 focus-visible:ring-2 focus-visible:ring-ring/30"
+                ref={nameInputInlineRef}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); addNameToList() }
+                }}
+              />
+              <Button
+                type="button"
+                className="h-12 w-12 transition-all hover:shadow-sm active:scale-[0.98]"
+                onClick={addNameToList}
+                aria-label="Add name"
+                variant={nameInputInline.trim() ? "default" : "secondary"}
+                disabled={!nameInputInline.trim()}
+              >
+                <Plus className="h-5 w-5" />
+              </Button>
+            </div>
+      
+            {names.length > 0 && (
+              <div className="space-y-2">
+                {names.map((n, i) => (
+                  <div
+                    key={`${n}-${i}`}
+                    className="group grid grid-cols-[1fr_auto_auto] items-center gap-2 px-3 py-2 rounded-lg border border-border bg-secondary/70 transition-colors hover:bg-secondary hover:border-foreground/20 hover:shadow-sm"
+                  >
+                    <span className="truncate text-sm font-medium transition-colors group-hover:text-foreground">
+                      {n}
+                    </span>
+      
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-6 w-6 p-0 opacity-70 transition-opacity group-hover:opacity-100 hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring/30"
+                      onClick={() => makePrimary(i)}
+                      aria-label="Mark as primary"
+                      title="Mark as primary"
+                      aria-pressed={i === primaryIdx}
+                    >
+                      <Star
+                        className={cn(
+                          "h-4 w-4 transition-[fill,transform] group-hover:scale-105",
+                          i === primaryIdx ? "fill-current" : "fill-transparent"
+                        )}
+                      />
+                    </Button>
+      
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-6 w-6 p-0 opacity-70 transition-opacity group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-destructive/30"
+                      onClick={() => removeNameFromList(i)}
+                      aria-label="Remove name"
+                      title="Remove"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+      
             {(shouldShowError(2) || nameDuplicate) && (nameDuplicate || getErrorMessage(errors.name)) && (
               <p className="text-sm text-destructive">
                 {nameDuplicate ? "That name is already taken" : getErrorMessage(errors.name)}
@@ -644,7 +768,6 @@ export function EntityStepDialog({ open, onOpenChange, onSuccess }: EntityStepDi
             )}
           </div>
         )
-
       case 3:
         return (
           <div className="space-y-4" key={stepKey as string}>
